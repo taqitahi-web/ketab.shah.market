@@ -2056,8 +2056,29 @@ function startApp() {
   } catch(e) {
     updateSyncStatusUI('error');
   }
-  // bootAuth নিজেই Firebase থেকে auth লোড করবে
-  bootAuth();
+
+  if (!fbDb) {
+    // Firebase নেই — সরাসরি boot
+    bootAuth();
+    return;
+  }
+
+  // Firebase connection হওয়ার জন্য অপেক্ষা করো (max 5 সেকেন্ড)
+  let booted = false;
+  const fallback = setTimeout(() => {
+    if (!booted) { booted = true; bootAuth(); }
+  }, 5000);
+
+  fbDb.ref('.info/connected').on('value', snap => {
+    if (booted) return;
+    if (snap.val() === true) {
+      // ✅ সত্যিকারের Firebase connection হয়েছে
+      booted = true;
+      clearTimeout(fallback);
+      fbDb.ref('.info/connected').off(); // listener সরাও
+      bootAuth();
+    }
+  });
 }
 
 if (typeof firebase !== 'undefined') {
