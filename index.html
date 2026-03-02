@@ -1244,52 +1244,71 @@ const AUTH_KEY = 'mkt_auth_v1';
 const SESSION_KEY = 'mkt_session';
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // ৮ ঘণ্টা
 
-// Auth — Firebase-এ সেভ, localStorage-এ cache
+// ===================== AUTH — Firebase-প্রথম সিস্টেম =====================
+// localStorage শুধু offline cache হিসেবে — সত্যিকারের source হলো Firebase
+
 function getAuth() {
+  // সবসময় localStorage cache থেকে পড়ো (sync এর পরে এটা Firebase-এর মতোই)
   return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
 }
+
 function saveAuth(data) {
-  // localStorage-এ সাথে সাথে সেভ
-  localStorage.setItem(AUTH_KEY, JSON.stringify(data));
-  // Firebase-এ সেভ — connected থাকলে এখনই, না থাকলে connect হলে
-  pushAuthToFirebase(data);
-}
-
-function pushAuthToFirebase(data) {
-  if (!data) data = getAuth();
-  if (!data) return;
+  // Firebase-এ আগে সেভ করো (single source of truth)
   if (fbDb) {
-    fbDb.ref('auth').set(data).catch(e => console.warn('Auth FB write error:', e));
+    fbDb.ref('auth').set(data).catch(e => console.warn('Auth write error:', e));
+  } else {
+    window._pendingAuthPush = data; // Firebase ready হলে push হবে
   }
-  // fbDb এখনো null — Firebase connect হলে push করো
-  else {
-    window._pendingAuthPush = data;
-  }
+  // localStorage-এও রাখো (offline + fast read)
+  localStorage.setItem(AUTH_KEY, JSON.stringify(data));
 }
 
-// Firebase থেকে auth লোড করো — নতুন browser/device-এর জন্য
-function syncAuthFromFirebase(callback) {
-  if (!fbDb) { callback(); return; }
+// Firebase থেকে auth লোড — প্রতিবার app শুরুতে
+function loadAuthFromFirebase(callback) {
+  // Loading indicator দেখাও
+  const loginCard = document.querySelector('.login-card');
+  if (loginCard) {
+    loginCard.style.opacity = '0.6';
+    loginCard.style.pointerEvents = 'none';
+  }
 
-  // ৫ সেকেন্ডের মধ্যে না পেলে localStorage দিয়ে চালাও
+  if (!fbDb) {
+    // Firebase নেই — localStorage দিয়ে চালাও
+    if (loginCard) { loginCard.style.opacity = ''; loginCard.style.pointerEvents = ''; }
+    callback(getAuth());
+    return;
+  }
+
   let done = false;
   const timer = setTimeout(() => {
-    if (!done) { done = true; callback(); }
-  }, 5000);
+    if (done) return;
+    done = true;
+    if (loginCard) { loginCard.style.opacity = ''; loginCard.style.pointerEvents = ''; }
+    // Timeout — localStorage fallback
+    callback(getAuth());
+  }, 6000);
 
   fbDb.ref('auth').once('value').then(snap => {
     if (done) return;
     done = true;
     clearTimeout(timer);
+    if (loginCard) { loginCard.style.opacity = ''; loginCard.style.pointerEvents = ''; }
 
     const fbAuth = snap.val();
     if (fbAuth) {
       // Firebase-এ auth আছে — localStorage আপডেট করো
       localStorage.setItem(AUTH_KEY, JSON.stringify(fbAuth));
+      callback(fbAuth);
+    } else {
+      // Firebase-এ নেই — localStorage চেক করো
+      callback(getAuth());
     }
-    callback();
   }).catch(() => {
-    if (!done) { done = true; clearTimeout(timer); callback(); }
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    if (loginCard) { loginCard.style.opacity = ''; loginCard.style.pointerEvents = ''; }
+    callback(getAuth());
   });
 }
 function hashStr(str) {
@@ -1433,16 +1452,21 @@ function doLogin() {
   const userId   = (document.getElementById('login-userid').value   || '').trim();
   const password = (document.getElementById('login-password').value || '').trim();
   if (!userId || !password) { showLoginError('login-error', '⚠️ আইডি ও পাসওয়ার্ড দিন'); return; }
-  const auth = getAuth();
-  if (!auth) { showLoginError('login-error', '⚠️ আগে সেটআপ করুন ("সেটআপ" ট্যাব)'); return; }
-  if (auth.userId.toLowerCase() !== userId.toLowerCase()) { showLoginError('login-error', '❌ ভুল অ্যাডমিন আইডি'); return; }
-  if (auth.pwdHash !== hashStr(password)) { showLoginError('login-error', '❌ ভুল পাসওয়ার্ড'); return; }
-  showLoginSuccess('login-success', '✅ অ্যাডমিন লগইন সফল!');
-  // login সফল হলে auth Firebase-এ push করো
-  setTimeout(() => {
-    if (fbDb) fbDb.ref('auth').set(auth);
-  }, 1000);
-  setTimeout(() => unlockApp('admin'), 700);
+
+  // বাটন disable করো
+  const btn = document.querySelector('#login-form .btn-login');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ যাচাই হচ্ছে...'; }
+
+  const resetBtn = () => { if (btn) { btn.disabled = false; btn.textContent = '👑 অ্যাডমিন হিসেবে প্রবেশ'; } };
+
+  loadAuthFromFirebase((auth) => {
+    resetBtn();
+    if (!auth) { showLoginError('login-error', '⚠️ আগে সেটআপ করুন'); return; }
+    if (auth.userId.toLowerCase() !== userId.toLowerCase()) { showLoginError('login-error', '❌ ভুল অ্যাডমিন আইডি'); return; }
+    if (auth.pwdHash !== hashStr(password)) { showLoginError('login-error', '❌ ভুল পাসওয়ার্ড'); return; }
+    showLoginSuccess('login-success', '✅ অ্যাডমিন লগইন সফল!');
+    setTimeout(() => unlockApp('admin'), 700);
+  });
 }
 
 // ---- Guest Login ----
@@ -1450,14 +1474,21 @@ function doGuestLogin() {
   const userId   = (document.getElementById('guest-userid').value   || '').trim();
   const password = (document.getElementById('guest-password').value || '').trim();
   if (!userId || !password) { showLoginError('guest-error', '⚠️ গেস্ট আইডি ও পাসওয়ার্ড দিন'); return; }
-  const auth = getAuth();
-  if (!auth || !auth.guests || auth.guests.length === 0) {
-    showLoginError('guest-error', '⚠️ কোনো গেস্ট আইডি সেটআপ হয়নি। অ্যাডমিনকে বলুন।'); return;
-  }
-  const guest = auth.guests.find(g => g.userId.toLowerCase() === userId.toLowerCase() && g.pwdHash === hashStr(password));
-  if (!guest) { showLoginError('guest-error', '❌ ভুল গেস্ট আইডি বা পাসওয়ার্ড'); return; }
-  showLoginSuccess('guest-success', `✅ স্বাগতম ${guest.userId}! প্রবেশ হচ্ছে...`);
-  setTimeout(() => unlockApp('guest'), 700);
+
+  const btn = document.querySelector('#guest-login-section .btn-login');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ যাচাই হচ্ছে...'; }
+  const resetBtn = () => { if (btn) { btn.disabled = false; btn.textContent = '👁️ গেস্ট হিসেবে প্রবেশ'; } };
+
+  loadAuthFromFirebase((auth) => {
+    resetBtn();
+    if (!auth || !auth.guests || auth.guests.length === 0) {
+      showLoginError('guest-error', '⚠️ কোনো গেস্ট আইডি নেই। অ্যাডমিনকে বলুন।'); return;
+    }
+    const guest = auth.guests.find(g => g.userId.toLowerCase() === userId.toLowerCase() && g.pwdHash === hashStr(password));
+    if (!guest) { showLoginError('guest-error', '❌ ভুল গেস্ট আইডি বা পাসওয়ার্ড'); return; }
+    showLoginSuccess('guest-success', `✅ স্বাগতম ${guest.userId}!`);
+    setTimeout(() => unlockApp('guest'), 700);
+  });
 }
 
 // ---- Register / Setup ----
@@ -1766,28 +1797,30 @@ function doChangeAuth() {
 
 // ---- Startup check ----
 function bootAuth() {
-  const auth = getAuth();
-  if (!auth) {
-    // প্রথমবার / নতুন browser — সেটআপ ট্যাব দেখাও
-    const regBtn = document.getElementById('reg-tab-btn');
-    regBtn.style.display = '';
-    // সব ট্যাব আগে inactive করো
-    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
-    regBtn.classList.add('active');
-    document.getElementById('login-form').style.display    = 'none';
-    document.getElementById('guest-form').style.display    = 'none';
-    document.getElementById('register-form').style.display = '';
-    return;
-  }
-  // সেশন ভ্যালিড থাকলে সরাসরি ঢুকে যাও
+  // সেশন ভ্যালিড থাকলে Firebase load ছাড়াই সরাসরি ঢুকে যাও
   const sessionRole = isSessionValid();
   if (sessionRole) {
     unlockApp(sessionRole);
     return;
   }
-  // সেটআপ ট্যাব লুকাও — শুধু অ্যাডমিন ও গেস্ট ট্যাব দেখাও
-  document.getElementById('reg-tab-btn').style.display = 'none';
-  initFingerprint();
+
+  // Firebase থেকে auth লোড করো — তারপর সিদ্ধান্ত নাও
+  loadAuthFromFirebase((auth) => {
+    if (!auth) {
+      // কোথাও auth নেই — প্রথমবার, সেটআপ দেখাও
+      const regBtn = document.getElementById('reg-tab-btn');
+      regBtn.style.display = '';
+      document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+      regBtn.classList.add('active');
+      document.getElementById('login-form').style.display    = 'none';
+      document.getElementById('guest-form').style.display    = 'none';
+      document.getElementById('register-form').style.display = '';
+    } else {
+      // Auth আছে — লগইন স্ক্রিন দেখাও
+      document.getElementById('reg-tab-btn').style.display = 'none';
+      initFingerprint();
+    }
+  });
 }
 
 // অ্যাপের মূল init (login-এর পরে)
@@ -2016,28 +2049,20 @@ function updateSyncStatusUI(status) {
   el.innerHTML = `<div style="padding:8px 12px;background:${c.bg};border-radius:8px;font-size:12px;color:${c.color};display:flex;align-items:center;gap:6px"><span>${c.icon}</span><span>${c.text}</span></div>`;
 }
 
-// Firebase init + Auth sync + Boot
+// Firebase init + Boot
 function startApp() {
   try {
     initFirebase();
-    if (fbDb) {
-      // Firebase connected — auth sync করো তারপর boot করো
-      syncAuthFromFirebase(() => bootAuth());
-    } else {
-      // Firebase নেই — সরাসরি boot
-      bootAuth();
-    }
   } catch(e) {
     updateSyncStatusUI('error');
-    bootAuth();
   }
+  // bootAuth নিজেই Firebase থেকে auth লোড করবে
+  bootAuth();
 }
 
-// Firebase SDK load হওয়ার জন্য একটু অপেক্ষা করো
 if (typeof firebase !== 'undefined') {
   startApp();
 } else {
-  // SDK এখনো load হয়নি — load হলে চালাও
   window.addEventListener('load', startApp);
 }
 
