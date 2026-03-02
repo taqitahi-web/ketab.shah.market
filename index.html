@@ -1261,17 +1261,27 @@ function saveAuth(data) {
 // Firebase থেকে auth লোড করো — নতুন browser/device-এর জন্য
 function syncAuthFromFirebase(callback) {
   if (!fbDb) { callback(); return; }
+
+  // ৫ সেকেন্ডের মধ্যে না পেলে localStorage দিয়ে চালাও
+  let done = false;
+  const timer = setTimeout(() => {
+    if (!done) { done = true; callback(); }
+  }, 5000);
+
   fbDb.ref('auth').once('value').then(snap => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+
     const fbAuth = snap.val();
-    if (fbAuth && !getAuth()) {
-      // নতুন browser — Firebase থেকে auth নিয়ে localStorage-এ রাখো
-      localStorage.setItem(AUTH_KEY, JSON.stringify(fbAuth));
-    } else if (fbAuth && getAuth()) {
-      // উভয় আছে — Firebase-টা latest ধরো (guests আপডেট হতে পারে)
+    if (fbAuth) {
+      // Firebase-এ auth আছে — localStorage আপডেট করো
       localStorage.setItem(AUTH_KEY, JSON.stringify(fbAuth));
     }
     callback();
-  }).catch(() => callback());
+  }).catch(() => {
+    if (!done) { done = true; clearTimeout(timer); callback(); }
+  });
 }
 function hashStr(str) {
   // সরল হ্যাশ (ব্রাউজার-compatible, WebCrypto ছাড়া sync)
@@ -1974,13 +1984,28 @@ function updateSyncStatusUI(status) {
 }
 
 // Firebase init + Auth sync + Boot
-try {
-  initFirebase();
-  // Firebase থেকে auth sync করো, তারপর bootAuth চালাও
-  syncAuthFromFirebase(() => bootAuth());
-} catch(e) {
-  updateSyncStatusUI('error');
-  bootAuth(); // Firebase না থাকলেও চালাও
+function startApp() {
+  try {
+    initFirebase();
+    if (fbDb) {
+      // Firebase connected — auth sync করো তারপর boot করো
+      syncAuthFromFirebase(() => bootAuth());
+    } else {
+      // Firebase নেই — সরাসরি boot
+      bootAuth();
+    }
+  } catch(e) {
+    updateSyncStatusUI('error');
+    bootAuth();
+  }
+}
+
+// Firebase SDK load হওয়ার জন্য একটু অপেক্ষা করো
+if (typeof firebase !== 'undefined') {
+  startApp();
+} else {
+  // SDK এখনো load হয়নি — load হলে চালাও
+  window.addEventListener('load', startApp);
 }
 
 
