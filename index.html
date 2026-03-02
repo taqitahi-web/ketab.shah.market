@@ -1438,6 +1438,10 @@ function doLogin() {
   if (auth.userId.toLowerCase() !== userId.toLowerCase()) { showLoginError('login-error', '❌ ভুল অ্যাডমিন আইডি'); return; }
   if (auth.pwdHash !== hashStr(password)) { showLoginError('login-error', '❌ ভুল পাসওয়ার্ড'); return; }
   showLoginSuccess('login-success', '✅ অ্যাডমিন লগইন সফল!');
+  // login সফল হলে auth Firebase-এ push করো
+  setTimeout(() => {
+    if (fbDb) fbDb.ref('auth').set(auth);
+  }, 1000);
   setTimeout(() => unlockApp('admin'), 700);
 }
 
@@ -1991,8 +1995,11 @@ function pushAllToFirebase() {
   fbDb.ref('loans').set(getLoans());
   fbDb.ref('marketInfo').set(getMarketInfo());
   fbDb.ref('partner').set(getPartner());
+  // Auth ও Firebase-এ রাখো — অন্য browser sync এর জন্য
+  const auth = getAuth();
+  if (auth) fbDb.ref('auth').set(auth);
   updateSyncStatusUI('synced');
-  alert('✅ সব ডেটা Firebase-এ আপলোড হয়েছে!');
+  alert('✅ সব ডেটা Firebase-এ আপলোড হয়েছে!\n\nএখন অন্য browser/device-এ খুললে পাসওয়ার্ড সেটআপ লাগবে না।');
 }
 
 // ---- Sync Status UI ----
