@@ -1246,15 +1246,24 @@ const SESSION_DURATION = 8 * 60 * 60 * 1000; // ৮ ঘণ্টা
 
 // Auth — Firebase-এ সেভ, localStorage-এ cache
 function getAuth() {
-  // localStorage cache থেকে পড়ো (fast, offline-safe)
   return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
 }
 function saveAuth(data) {
   // localStorage-এ সাথে সাথে সেভ
   localStorage.setItem(AUTH_KEY, JSON.stringify(data));
-  // Firebase-এ সেভ — যেন সব device/browser-এ sync হয়
+  // Firebase-এ সেভ — connected থাকলে এখনই, না থাকলে connect হলে
+  pushAuthToFirebase(data);
+}
+
+function pushAuthToFirebase(data) {
+  if (!data) data = getAuth();
+  if (!data) return;
   if (fbDb) {
     fbDb.ref('auth').set(data).catch(e => console.warn('Auth FB write error:', e));
+  }
+  // fbDb এখনো null — Firebase connect হলে push করো
+  else {
+    window._pendingAuthPush = data;
   }
 }
 
@@ -1853,6 +1862,23 @@ function initFirebase() {
     fbDb  = firebase.database();
     fbSyncEnabled = true;
     console.log('✅ Firebase connected');
+
+    // Firebase connect হওয়ার সাথে সাথে localStorage-এর auth Firebase-এ push করো
+    const localAuth = getAuth();
+    if (localAuth) {
+      // আগে Firebase-এ কী আছে দেখো — না থাকলে push করো
+      fbDb.ref('auth').once('value').then(snap => {
+        if (!snap.val()) {
+          fbDb.ref('auth').set(localAuth);
+        }
+      });
+    }
+    // pending auth push থাকলে করো
+    if (window._pendingAuthPush) {
+      fbDb.ref('auth').set(window._pendingAuthPush);
+      window._pendingAuthPush = null;
+    }
+
     attachFirebaseListeners();
     updateSyncStatusUI('connected');
   } catch(e) {
