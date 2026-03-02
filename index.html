@@ -1244,11 +1244,34 @@ const AUTH_KEY = 'mkt_auth_v1';
 const SESSION_KEY = 'mkt_session';
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // ৮ ঘণ্টা
 
+// Auth — Firebase-এ সেভ, localStorage-এ cache
 function getAuth() {
+  // localStorage cache থেকে পড়ো (fast, offline-safe)
   return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
 }
 function saveAuth(data) {
+  // localStorage-এ সাথে সাথে সেভ
   localStorage.setItem(AUTH_KEY, JSON.stringify(data));
+  // Firebase-এ সেভ — যেন সব device/browser-এ sync হয়
+  if (fbDb) {
+    fbDb.ref('auth').set(data).catch(e => console.warn('Auth FB write error:', e));
+  }
+}
+
+// Firebase থেকে auth লোড করো — নতুন browser/device-এর জন্য
+function syncAuthFromFirebase(callback) {
+  if (!fbDb) { callback(); return; }
+  fbDb.ref('auth').once('value').then(snap => {
+    const fbAuth = snap.val();
+    if (fbAuth && !getAuth()) {
+      // নতুন browser — Firebase থেকে auth নিয়ে localStorage-এ রাখো
+      localStorage.setItem(AUTH_KEY, JSON.stringify(fbAuth));
+    } else if (fbAuth && getAuth()) {
+      // উভয় আছে — Firebase-টা latest ধরো (guests আপডেট হতে পারে)
+      localStorage.setItem(AUTH_KEY, JSON.stringify(fbAuth));
+    }
+    callback();
+  }).catch(() => callback());
 }
 function hashStr(str) {
   // সরল হ্যাশ (ব্রাউজার-compatible, WebCrypto ছাড়া sync)
@@ -1722,9 +1745,15 @@ function doChangeAuth() {
 function bootAuth() {
   const auth = getAuth();
   if (!auth) {
-    // প্রথমবার — সেটআপ ট্যাব দেখাও ও সরাসরি সেটআপে নিয়ে যাও
-    document.getElementById('reg-tab-btn').style.display = '';
-    document.querySelectorAll('.login-tab')[2].click();
+    // প্রথমবার / নতুন browser — সেটআপ ট্যাব দেখাও
+    const regBtn = document.getElementById('reg-tab-btn');
+    regBtn.style.display = '';
+    // সব ট্যাব আগে inactive করো
+    document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+    regBtn.classList.add('active');
+    document.getElementById('login-form').style.display    = 'none';
+    document.getElementById('guest-form').style.display    = 'none';
+    document.getElementById('register-form').style.display = '';
     return;
   }
   // সেশন ভ্যালিড থাকলে সরাসরি ঢুকে যাও
@@ -1733,7 +1762,7 @@ function bootAuth() {
     unlockApp(sessionRole);
     return;
   }
-  // সেটআপ ট্যাব সম্পূর্ণ লুকানো থাকবে
+  // সেটআপ ট্যাব লুকাও — শুধু অ্যাডমিন ও গেস্ট ট্যাব দেখাও
   document.getElementById('reg-tab-btn').style.display = 'none';
   initFingerprint();
 }
@@ -1944,8 +1973,15 @@ function updateSyncStatusUI(status) {
   el.innerHTML = `<div style="padding:8px 12px;background:${c.bg};border-radius:8px;font-size:12px;color:${c.color};display:flex;align-items:center;gap:6px"><span>${c.icon}</span><span>${c.text}</span></div>`;
 }
 
-// Firebase init
-try { initFirebase(); } catch(e) { updateSyncStatusUI('error'); }
+// Firebase init + Auth sync + Boot
+try {
+  initFirebase();
+  // Firebase থেকে auth sync করো, তারপর bootAuth চালাও
+  syncAuthFromFirebase(() => bootAuth());
+} catch(e) {
+  updateSyncStatusUI('error');
+  bootAuth(); // Firebase না থাকলেও চালাও
+}
 
 
 
