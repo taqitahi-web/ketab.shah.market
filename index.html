@@ -11,6 +11,8 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<!-- SheetJS for Excel import -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style id="theme-style">
 /* ডিফল্ট নেভি থিম */
 :root {
@@ -167,8 +169,32 @@ tr:nth-child(even) td { background: #f0f6ff; }
 @keyframes fp-pulse { 0%,100%{box-shadow:0 0 10px rgba(112,173,71,0.4)} 50%{box-shadow:0 0 30px rgba(112,173,71,0.8)} }
 .lock-icon { font-size: 18px; color: rgba(255,255,255,0.8); }
 
-/* অ্যাপ লক করা অবস্থায় বডি স্ক্রল বন্ধ */
-body.locked { overflow: hidden; }
+/* ===== CONFIRMATION MODAL ===== */
+#confirm-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99999;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.2s;
+}
+#confirm-modal-overlay.show { opacity: 1; }
+#confirm-modal-box {
+  background: white; border-radius: 20px; padding: 28px 24px; max-width: 340px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3); transform: scale(0.9); transition: transform 0.2s;
+  text-align: center;
+}
+#confirm-modal-overlay.show #confirm-modal-box { transform: scale(1); }
+#confirm-modal-icon { font-size: 52px; margin-bottom: 12px; }
+#confirm-modal-title { font-size: 17px; font-weight: bold; color: #1F3864; margin-bottom: 8px; }
+#confirm-modal-msg { font-size: 13px; color: #555; line-height: 1.6; margin-bottom: 22px; }
+#confirm-modal-btns { display: flex; gap: 10px; }
+#confirm-modal-btns button { flex: 1; padding: 13px; border: none; border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.15s; }
+#confirm-btn-cancel { background: #f0f4f8; color: #555; }
+#confirm-btn-cancel:hover { background: #e0e8f0; }
+#confirm-btn-ok { background: #FF4444; color: white; }
+#confirm-btn-ok:hover { background: #cc0000; transform: translateY(-1px); }
+#confirm-btn-ok.green { background: #70AD47; }
+#confirm-btn-ok.green:hover { background: #5a9138; }
+#confirm-btn-ok.blue { background: #2E75B6; }
+
 
 /* সেটিংসে পাসওয়ার্ড সেকশন */
 .auth-setting-box { background: #f0f6ff; border-left: 4px solid var(--secondary); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
@@ -184,52 +210,96 @@ body.locked { overflow: hidden; }
   <div class="login-sub">ভাড়া ম্যানেজমেন্ট সিস্টেম</div>
 
   <div class="login-card">
-    <!-- ট্যাব: লগইন / রেজিস্ট্রেশন -->
+    <!-- ট্যাব: Admin / Guest / Setup -->
     <div class="login-tabs" id="login-tabs">
-      <button class="login-tab active" onclick="switchLoginTab('login', this)">🔐 লগইন</button>
-      <button class="login-tab" onclick="switchLoginTab('register', this)" id="reg-tab-btn">📝 সেটআপ</button>
+      <button class="login-tab active" onclick="switchLoginTab('login', this)">👑 অ্যাডমিন</button>
+      <button class="login-tab" onclick="switchLoginTab('guest', this)">👁️ গেস্ট</button>
+      <button class="login-tab" onclick="switchLoginTab('register', this)" id="reg-tab-btn" style="display:none">⚙️ সেটআপ</button>
     </div>
 
-    <!-- লগইন ফর্ম -->
+    <!-- অ্যাডমিন লগইন ফর্ম -->
     <div id="login-form">
       <div style="text-align:center;margin-bottom:16px">
-        <div class="fp-ring" id="fp-ring">🔒</div>
-        <div style="color:rgba(255,255,255,0.6);font-size:11px" id="fp-status-text">আপনার ID ও পাসওয়ার্ড দিন</div>
+        <div class="fp-ring" id="fp-ring">👑</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:bold" id="fp-status-text">অ্যাডমিন — সম্পূর্ণ অ্যাক্সেস</div>
       </div>
-
       <div class="login-input-wrap">
         <span class="li-icon">🪪</span>
-        <input type="text" id="login-userid" placeholder="ইউজার আইডি" autocomplete="username" inputmode="text">
+        <input type="text" id="login-userid" placeholder="অ্যাডমিন আইডি" autocomplete="username" inputmode="text">
       </div>
       <div class="login-input-wrap">
         <span class="li-icon">🔑</span>
         <input type="password" id="login-password" placeholder="পাসওয়ার্ড" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         <button class="li-eye" onclick="togglePwdView('login-password', this)">👁️</button>
       </div>
-
-      <button class="btn-login" onclick="doLogin()">🔓 প্রবেশ করুন</button>
-
+      <button class="btn-login" onclick="doLogin()">👑 অ্যাডমিন হিসেবে প্রবেশ</button>
       <button class="btn-fingerprint" id="fp-btn" onclick="doFingerprint()" disabled>
-        <span style="font-size:22px">👆</span> ফিঙ্গারপ্রিন্ট / Face ID দিয়ে লগইন
+        <span style="font-size:22px">👆</span> ফিঙ্গারপ্রিন্ট / Face ID
       </button>
-
       <div class="login-error" id="login-error"></div>
       <div class="login-success-msg" id="login-success"></div>
     </div>
 
-    <!-- সেটআপ ফর্ম (প্রথমবার বা রিসেট) -->
-    <div id="register-form" style="display:none">
-      <div style="color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:14px;text-align:center">
-        🛡️ প্রথমবার ব্যবহারের আগে আইডি ও পাসওয়ার্ড সেট করুন
+    <!-- গেস্ট লগইন ফর্ম -->
+    <div id="guest-form" style="display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:48px;margin-bottom:8px">🔐</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:14px;font-weight:bold">গেস্ট অ্যাক্সেস</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:4px">শুধু অ্যাডমিনের দেওয়া আইডি ও পাসওয়ার্ড দিয়ে ঢোকা যাবে</div>
       </div>
 
+      <!-- Invite Code সেকশন — প্রথমে দেখায় -->
+      <div id="guest-invite-section">
+        <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:14px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.8;text-align:center">
+          🔒 এই পেজ শুধু আমন্ত্রিত ব্যক্তিদের জন্য<br>
+          অ্যাডমিনের দেওয়া <strong>Invite Code</strong> দিয়ে প্রবেশ করুন
+        </div>
+        <div class="login-input-wrap">
+          <span class="li-icon">🎫</span>
+          <input type="password" id="guest-invite-code" placeholder="Invite Code দিন" autocomplete="off" onkeydown="if(event.key==='Enter')verifyInviteCode()">
+          <button class="li-eye" onclick="togglePwdView('guest-invite-code', this)">👁️</button>
+        </div>
+        <button class="btn-login" style="background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.4)" onclick="verifyInviteCode()">
+          🎫 Invite Code যাচাই করুন
+        </button>
+        <div class="login-error" id="invite-error"></div>
+      </div>
+
+      <!-- Invite Code সঠিক হলে এই সেকশন দেখায় -->
+      <div id="guest-login-section" style="display:none">
+        <div style="background:rgba(112,173,71,0.2);border:1px solid rgba(112,173,71,0.4);border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.8);text-align:center">
+          ✅ Invite Code সঠিক! এখন আইডি ও পাসওয়ার্ড দিন
+        </div>
+        <div class="login-input-wrap">
+          <span class="li-icon">🪪</span>
+          <input type="text" id="guest-userid" placeholder="গেস্ট আইডি" autocomplete="off" onkeydown="if(event.key==='Enter')doGuestLogin()">
+        </div>
+        <div class="login-input-wrap">
+          <span class="li-icon">🔑</span>
+          <input type="password" id="guest-password" placeholder="গেস্ট পাসওয়ার্ড" autocomplete="off" onkeydown="if(event.key==='Enter')doGuestLogin()">
+          <button class="li-eye" onclick="togglePwdView('guest-password', this)">👁️</button>
+        </div>
+        <button class="btn-login" style="background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.4)" onclick="doGuestLogin()">
+          👁️ গেস্ট হিসেবে প্রবেশ
+        </button>
+      </div>
+
+      <div class="login-error" id="guest-error"></div>
+      <div class="login-success-msg" id="guest-success"></div>
+    </div>
+
+    <!-- সেটআপ ফর্ম -->
+    <div id="register-form" style="display:none">
+      <div style="color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:14px;text-align:center">
+        🛡️ অ্যাডমিন আইডি ও পাসওয়ার্ড সেট করুন
+      </div>
       <div class="login-input-wrap">
-        <span class="li-icon">🪪</span>
-        <input type="text" id="reg-userid" placeholder="নতুন ইউজার আইডি (যেমন: masud2025)" autocomplete="off">
+        <span class="li-icon">👑</span>
+        <input type="text" id="reg-userid" placeholder="অ্যাডমিন আইডি (যেমন: masud2025)" autocomplete="off">
       </div>
       <div class="login-input-wrap">
         <span class="li-icon">🔑</span>
-        <input type="password" id="reg-password" placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)" autocomplete="new-password">
+        <input type="password" id="reg-password" placeholder="পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)" autocomplete="new-password">
         <button class="li-eye" onclick="togglePwdView('reg-password', this)">👁️</button>
       </div>
       <div class="login-input-wrap">
@@ -237,7 +307,6 @@ body.locked { overflow: hidden; }
         <input type="password" id="reg-confirm" placeholder="পাসওয়ার্ড আবার দিন" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()">
         <button class="li-eye" onclick="togglePwdView('reg-confirm', this)">👁️</button>
       </div>
-
       <button class="btn-login" onclick="doRegister()">✅ সেটআপ সম্পন্ন করুন</button>
       <div class="login-error" id="reg-error"></div>
       <div class="login-success-msg" id="reg-success"></div>
@@ -246,6 +315,19 @@ body.locked { overflow: hidden; }
 
   <div style="color:rgba(255,255,255,0.35);font-size:11px;margin-top:20px;text-align:center">
     🔒 সম্পূর্ণ নিরাপদ — ডেটা শুধু আপনার ডিভাইসে সংরক্ষিত
+  </div>
+</div>
+
+<!-- ===== CUSTOM CONFIRMATION MODAL ===== -->
+<div id="confirm-modal-overlay">
+  <div id="confirm-modal-box">
+    <div id="confirm-modal-icon">⚠️</div>
+    <div id="confirm-modal-title">নিশ্চিত করুন</div>
+    <div id="confirm-modal-msg">আপনি কি নিশ্চিত?</div>
+    <div id="confirm-modal-btns">
+      <button id="confirm-btn-cancel" onclick="closeConfirm(false)">❌ বাতিল</button>
+      <button id="confirm-btn-ok" onclick="closeConfirm(true)">✅ হ্যাঁ, করুন</button>
+    </div>
   </div>
 </div>
 
@@ -584,12 +666,31 @@ body.locked { overflow: hidden; }
     <div class="divider"></div>
     <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:6px">🔐 নিরাপত্তা সেটিংস</p>
     <div class="auth-setting-box">
-      <div style="font-size:12px;color:#555;margin-bottom:8px">আপনার বর্তমান আইডি:</div>
+      <div style="font-size:12px;color:#555;margin-bottom:4px">আপনার রোল ও আইডি:</div>
       <div class="auth-id-display" id="settings-userid-display">—</div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-primary btn-sm" onclick="hideModal('info-modal');showModal('change-auth-modal')">✏️ আইডি/পাসওয়ার্ড পরিবর্তন</button>
+        <button class="btn btn-primary btn-sm" onclick="hideModal('info-modal');showModal('change-auth-modal')">✏️ আইডি/পাসওয়ার্ড</button>
         <button class="btn btn-danger btn-sm" onclick="doLogout()">🚪 লগআউট</button>
       </div>
+    </div>
+
+    <!-- গেস্ট ম্যানেজমেন্ট — শুধু অ্যাডমিনের জন্য -->
+    <div id="guest-mgmt-section">
+      <div style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:8px">👥 গেস্ট আইডি ম্যানেজমেন্ট</div>
+
+      <!-- Invite Code সেটিং -->
+      <div style="background:#f0f6ff;border-left:4px solid #2E75B6;border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:bold;color:#1F3864;margin-bottom:6px">🎫 Invite Code (গেস্ট ট্যাব খোলার চাবি)</div>
+        <div style="font-size:11px;color:#666;margin-bottom:8px">এই কোড ছাড়া কেউ গেস্ট ট্যাবে ঢুকতে পারবে না। শুধু আপনার বিশ্বস্ত লোকদের দিন।</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="invite-code-input" placeholder="Invite Code সেট করুন" style="flex:1;padding:8px 10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:13px;font-family:monospace">
+          <button class="btn btn-primary btn-sm" onclick="saveInviteCode()">সেভ</button>
+        </div>
+        <div id="invite-code-status" style="font-size:11px;color:#555;margin-top:6px"></div>
+      </div>
+
+      <div id="guest-list" style="margin-bottom:8px"></div>
+      <button class="btn btn-success btn-sm" style="width:100%" onclick="showModal('add-guest-modal')">+ নতুন গেস্ট আইডি তৈরি করুন</button>
     </div>
 
     <div class="divider"></div>
@@ -620,12 +721,133 @@ body.locked { overflow: hidden; }
       </button>
     </div>
     <input type="file" id="import-file" accept=".json" onchange="importFromJSON(this)" style="font-size:12px;width:100%;padding:8px;border:1.5px dashed #BDD7EE;border-radius:8px">
-    <div style="font-size:11px;color:#888;margin-top:4px;text-align:center">↑ অথবা ডিভাইস থেকে JSON ফাইল বেছে নিন</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;text-align:center">↑ JSON ফাইল থেকে রিস্টোর</div>
+    <div style="margin-top:8px">
+      <label style="display:block;width:100%;padding:11px;background:#70AD47;color:white;border-radius:10px;font-size:14px;font-weight:bold;text-align:center;cursor:pointer">
+        📊 Excel ফাইল ইম্পোর্ট করুন
+        <input type="file" id="excel-import-file" accept=".xlsx,.xls,.csv" onchange="importFromExcel(this)" style="display:none">
+      </label>
+    </div>
+    <div style="font-size:11px;color:#888;margin-top:4px;text-align:center">↑ আমার দেওয়া টেমপ্লেট Excel ফাইল ইম্পোর্ট করুন</div>
+    <div id="excel-import-status" style="margin-top:6px"></div>
     <div id="drive-status" style="margin-top:8px"></div>
+    <div class="divider"></div>
+    <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:6px">🗑️ ভুল ডেটা মুছুন</p>
+    <button class="btn" style="width:100%;background:#FF6D00;color:white;font-size:13px;margin-bottom:6px" onclick="hideModal('info-modal');showModal('bulk-delete-modal')">
+      🗑️ নির্দিষ্ট মাস / দোকানের রেকর্ড মুছুন
+    </button>
     <div class="divider"></div>
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="hideModal('info-modal')">বন্ধ</button>
       <button class="btn btn-danger" onclick="clearAllData()">🗑️ সব মুছুন</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: BULK DELETE -->
+<div class="modal-overlay" id="bulk-delete-modal">
+  <div class="modal">
+    <h3>🗑️ ভুল রেকর্ড মুছুন</h3>
+
+    <!-- ট্যাব -->
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button id="bd-tab-month" onclick="switchBdTab('month')"
+        style="flex:1;padding:9px;border-radius:8px;border:2px solid #2E75B6;background:#2E75B6;color:white;font-size:13px;font-weight:bold;cursor:pointer">
+        📅 মাস অনুযায়ী
+      </button>
+      <button id="bd-tab-shop" onclick="switchBdTab('shop')"
+        style="flex:1;padding:9px;border-radius:8px;border:2px solid #ddd;background:white;color:#555;font-size:13px;font-weight:bold;cursor:pointer">
+        🏪 দোকান অনুযায়ী
+      </button>
+    </div>
+
+    <!-- মাস অনুযায়ী -->
+    <div id="bd-month-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>বছর</label>
+          <select id="bd-year">
+            <option>2023</option><option>2024</option><option selected>2025</option><option>2026</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>মাস</label>
+          <select id="bd-month">
+            <option value="">— সব মাস —</option>
+            <option>Jan</option><option>Feb</option><option>Mar</option><option>Apr</option>
+            <option>May</option><option>Jun</option><option>Jul</option><option>Aug</option>
+            <option>Sep</option><option>Oct</option><option>Nov</option><option>Dec</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" style="width:100%;background:#eee;color:#333;margin-bottom:8px" onclick="previewBulkDelete('month')">
+        🔍 কতটি রেকর্ড মুছবে দেখুন
+      </button>
+    </div>
+
+    <!-- দোকান অনুযায়ী -->
+    <div id="bd-shop-section" style="display:none">
+      <div class="form-group">
+        <label>দোকান সিলেক্ট করুন</label>
+        <select id="bd-shop" style="width:100%">
+          <option value="">— দোকান বেছে নিন —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>বছর (ঐচ্ছিক)</label>
+          <select id="bd-shop-year">
+            <option value="">— সব বছর —</option>
+            <option>2023</option><option>2024</option><option>2025</option><option>2026</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>মাস (ঐচ্ছিক)</label>
+          <select id="bd-shop-month">
+            <option value="">— সব মাস —</option>
+            <option>Jan</option><option>Feb</option><option>Mar</option><option>Apr</option>
+            <option>May</option><option>Jun</option><option>Jul</option><option>Aug</option>
+            <option>Sep</option><option>Oct</option><option>Nov</option><option>Dec</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" style="width:100%;background:#eee;color:#333;margin-bottom:8px" onclick="previewBulkDelete('shop')">
+        🔍 কতটি রেকর্ড মুছবে দেখুন
+      </button>
+    </div>
+
+    <!-- Preview -->
+    <div id="bd-preview" style="margin-bottom:10px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal('bulk-delete-modal')">বাতিল</button>
+      <button class="btn btn-danger" id="bd-confirm-btn" style="display:none" onclick="executeBulkDelete()">
+        🗑️ মুছে ফেলুন
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADD GUEST -->
+<div class="modal-overlay" id="add-guest-modal">
+  <div class="modal">
+    <h3>👥 নতুন গেস্ট আইডি</h3>
+    <div class="info-box">👁️ গেস্ট শুধু ডেটা দেখতে পাবে — কোনো পরিবর্তন করতে পারবে না।</div>
+    <div class="form-group">
+      <label>গেস্ট আইডি</label>
+      <input type="text" id="new-guest-id" placeholder="যেমন: partner1, helper2" style="width:100%;padding:11px 12px;border:1.5px solid var(--border-light);border-radius:8px;font-size:14px">
+    </div>
+    <div class="form-group">
+      <label>গেস্ট পাসওয়ার্ড</label>
+      <div style="position:relative">
+        <input type="password" id="new-guest-pwd" placeholder="কমপক্ষে ৪ অক্ষর" style="width:100%;padding:11px 40px 11px 12px;border:1.5px solid var(--border-light);border-radius:8px;font-size:14px">
+        <button onclick="togglePwdView('new-guest-pwd',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px">👁️</button>
+      </div>
+    </div>
+    <div id="add-guest-alert"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal('add-guest-modal')">বাতিল</button>
+      <button class="btn btn-success" onclick="addGuestUser()">✅ গেস্ট তৈরি করুন</button>
     </div>
   </div>
 </div>
@@ -1040,11 +1262,11 @@ function hashStr(str) {
 function isSessionValid() {
   try {
     const s = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-    return s && (Date.now() - s.ts < SESSION_DURATION);
+    return s && (Date.now() - s.ts < SESSION_DURATION) ? s.role || 'admin' : false;
   } catch { return false; }
 }
-function setSession() {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ts: Date.now() }));
+function setSession(role = 'admin') {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ts: Date.now(), role }));
 }
 function clearSession() {
   sessionStorage.removeItem(SESSION_KEY);
@@ -1071,37 +1293,125 @@ function showLoginSuccess(id, msg) {
 function switchLoginTab(tab, btn) {
   document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('login-form').style.display   = tab === 'login'    ? '' : 'none';
+  document.getElementById('login-form').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('guest-form').style.display    = tab === 'guest'    ? '' : 'none';
   document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
 }
 
+// ---- Current Role ----
+let currentRole = 'guest'; // 'admin' | 'guest'
+
+function isAdmin() { return currentRole === 'admin'; }
+
 // ---- Unlock app ----
-function unlockApp() {
-  setSession();
+function unlockApp(role = 'admin') {
+  currentRole = role;
+  setSession(role);
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-app').style.display = 'block';
   document.body.classList.remove('locked');
-  // সেটিংসে আইডি দেখাও
+
+  // সেটিংসে আইডি ও রোল দেখাও
   const auth = getAuth();
   if (auth) {
     const el = document.getElementById('settings-userid-display');
-    if (el) el.textContent = auth.userId;
+    if (el) el.textContent = role === 'admin' ? `👑 ${auth.userId}` : `👁️ গেস্ট`;
   }
-  // অ্যাপ ইনিশিয়েলাইজ
+
+  // Guest মোডে write বাটনগুলো লুকাও
+  applyRoleRestrictions(role);
   initApp();
 }
 
-// ---- Login ----
+// ---- Role Restrictions ----
+function applyRoleRestrictions(role) {
+  // Guest হলে সব write/edit/delete বাটন disable করো
+  const writeSelectors = [
+    '#page-entry .btn-success', '#page-entry .btn-primary', '#page-entry .btn-warning',
+    '.btn[onclick*="saveEntry"]', '.btn[onclick*="saveExpense"]', '.btn[onclick*="saveShop"]',
+    '.btn[onclick*="deleteEntry"]', '.btn[onclick*="deleteExpense"]', '.btn[onclick*="deleteShop"]',
+    '.btn[onclick*="showModal(\'add-"]', '.shop-actions .btn',
+    'button[onclick*="clearAllData"]', 'button[onclick*="exportToExcel"]',
+    'button[onclick*="pushAllToFirebase"]', 'button[onclick*="driveUploadBackup"]',
+    'button[onclick*="showBackupEmailModal"]',
+  ];
+
+  if (role === 'guest') {
+    // Bottom nav থেকে এন্ট্রি, নোট ট্যাব লুকাও (খরচ দেখাবে — read only)
+    document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => {
+      const onclick = btn.getAttribute('onclick') || '';
+      if (onclick.includes('page-entry') || onclick.includes('page-shops') ||
+          onclick.includes('page-notes')) {
+        btn.style.display = 'none';
+      }
+    });
+
+    // নোট পেজ সম্পূর্ণ লুকাও
+    const notesPage = document.getElementById('page-notes');
+    if (notesPage) notesPage.style.display = 'none';
+
+    // সব section-title এর + নতুন বাটন লুকাও
+    document.querySelectorAll('.section-title .btn-success, .section-title .btn-warning').forEach(b => {
+      b.style.display = 'none';
+    });
+
+    // সেটিংস বাটন লুকাও
+    document.querySelector('.menu-btn') && (document.querySelector('.menu-btn').style.display = 'none');
+
+    // Guest banner দেখাও topbar-এ
+    const sub = document.getElementById('market-contact-info');
+    if (sub) {
+      const banner = document.createElement('div');
+      banner.id = 'guest-banner';
+      banner.style.cssText = 'background:rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:11px;color:white;display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:4px';
+      banner.innerHTML = `<span>👁️ গেস্ট মোড — শুধু দেখার অনুমতি</span><button onclick="doLogout()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">🚪 বের হন</button>`;
+      sub.parentNode.insertBefore(banner, sub.nextSibling);
+    }
+
+    // পেজ গার্ড — entry/shops/notes পেজে গেলে ব্লক করো
+    guardWritePages();
+  }
+}
+
+function guardWritePages() {
+  const observer = new MutationObserver(() => {
+    if (currentRole !== 'guest') return;
+    ['page-entry','page-shops','page-notes'].forEach(pid => {
+      const p = document.getElementById(pid);
+      if (p && p.classList.contains('active')) {
+        showPage('page-dashboard');
+      }
+    });
+  });
+  document.querySelectorAll('.page').forEach(p => observer.observe(p, { attributes: true, attributeFilter: ['class'] }));
+}
+
+// ---- Admin Login ----
 function doLogin() {
   const userId   = (document.getElementById('login-userid').value   || '').trim();
   const password = (document.getElementById('login-password').value || '').trim();
   if (!userId || !password) { showLoginError('login-error', '⚠️ আইডি ও পাসওয়ার্ড দিন'); return; }
   const auth = getAuth();
   if (!auth) { showLoginError('login-error', '⚠️ আগে সেটআপ করুন ("সেটআপ" ট্যাব)'); return; }
-  if (auth.userId.toLowerCase() !== userId.toLowerCase()) { showLoginError('login-error', '❌ ভুল ইউজার আইডি'); return; }
+  if (auth.userId.toLowerCase() !== userId.toLowerCase()) { showLoginError('login-error', '❌ ভুল অ্যাডমিন আইডি'); return; }
   if (auth.pwdHash !== hashStr(password)) { showLoginError('login-error', '❌ ভুল পাসওয়ার্ড'); return; }
-  showLoginSuccess('login-success', '✅ লগইন সফল! প্রবেশ করছেন...');
-  setTimeout(unlockApp, 700);
+  showLoginSuccess('login-success', '✅ অ্যাডমিন লগইন সফল!');
+  setTimeout(() => unlockApp('admin'), 700);
+}
+
+// ---- Guest Login ----
+function doGuestLogin() {
+  const userId   = (document.getElementById('guest-userid').value   || '').trim();
+  const password = (document.getElementById('guest-password').value || '').trim();
+  if (!userId || !password) { showLoginError('guest-error', '⚠️ গেস্ট আইডি ও পাসওয়ার্ড দিন'); return; }
+  const auth = getAuth();
+  if (!auth || !auth.guests || auth.guests.length === 0) {
+    showLoginError('guest-error', '⚠️ কোনো গেস্ট আইডি সেটআপ হয়নি। অ্যাডমিনকে বলুন।'); return;
+  }
+  const guest = auth.guests.find(g => g.userId.toLowerCase() === userId.toLowerCase() && g.pwdHash === hashStr(password));
+  if (!guest) { showLoginError('guest-error', '❌ ভুল গেস্ট আইডি বা পাসওয়ার্ড'); return; }
+  showLoginSuccess('guest-success', `✅ স্বাগতম ${guest.userId}! প্রবেশ হচ্ছে...`);
+  setTimeout(() => unlockApp('guest'), 700);
 }
 
 // ---- Register / Setup ----
@@ -1217,7 +1527,157 @@ async function doFingerprint() {
   }
 }
 
-// ---- Logout ----
+// ---- Invite Code ----
+function getInviteCode() {
+  const auth = getAuth();
+  return auth ? (auth.inviteCode || '') : '';
+}
+
+function saveInviteCode() {
+  const code = (document.getElementById('invite-code-input').value || '').trim();
+  if (!code || code.length < 4) {
+    document.getElementById('invite-code-status').innerHTML = '<span style="color:#c00">⚠️ কমপক্ষে ৪ অক্ষর দিন</span>';
+    return;
+  }
+  const auth = getAuth();
+  if (!auth) return;
+  saveAuth({ ...auth, inviteCode: code });
+  document.getElementById('invite-code-status').innerHTML = `<span style="color:#155724">✅ Invite Code সেভ হয়েছে। গেস্টদের এই কোড দিন: <strong style="font-family:monospace">${code}</strong></span>`;
+}
+
+function verifyInviteCode() {
+  const entered = (document.getElementById('guest-invite-code').value || '').trim();
+  const saved = getInviteCode();
+
+  if (!saved) {
+    // Invite Code সেট না থাকলে সরাসরি login section দেখাও
+    document.getElementById('guest-invite-section').style.display = 'none';
+    document.getElementById('guest-login-section').style.display = '';
+    return;
+  }
+
+  if (!entered) {
+    showLoginError('invite-error', '⚠️ Invite Code দিন'); return;
+  }
+  if (entered !== saved) {
+    showLoginError('invite-error', '❌ ভুল Invite Code। অ্যাডমিনের কাছ থেকে সঠিক কোড নিন।'); return;
+  }
+
+  // সঠিক কোড
+  document.getElementById('guest-invite-section').style.display = 'none';
+  document.getElementById('guest-login-section').style.display = '';
+  document.getElementById('guest-userid').focus();
+}
+
+// settings খোলার সময় Invite Code দেখাও
+const _renderGuestSettings = renderGuestList;
+renderGuestList = function() {
+  _renderGuestSettings();
+  // Invite Code বর্তমান মান দেখাও
+  const code = getInviteCode();
+  const input = document.getElementById('invite-code-input');
+  const status = document.getElementById('invite-code-status');
+  if (input) input.value = code || '';
+  if (status) {
+    status.innerHTML = code
+      ? `<span style="color:#155724">✅ বর্তমান কোড: <strong style="font-family:monospace">${code}</strong></span>`
+      : '<span style="color:#856404">⚠️ এখনো Invite Code সেট করা হয়নি</span>';
+  }
+};
+
+// গেস্ট ট্যাব সুইচ হলে form reset করো
+const _origSwitchLoginTab = switchLoginTab;
+switchLoginTab = function(tab, btn) {
+  _origSwitchLoginTab(tab, btn);
+  if (tab === 'guest') {
+    // গেস্ট ট্যাব খুললে সবসময় invite section থেকে শুরু
+    const inviteCode = getInviteCode();
+    if (inviteCode) {
+      document.getElementById('guest-invite-section').style.display = '';
+      document.getElementById('guest-login-section').style.display = 'none';
+      document.getElementById('guest-invite-code').value = '';
+    } else {
+      // Invite Code নেই — সরাসরি login
+      document.getElementById('guest-invite-section').style.display = 'none';
+      document.getElementById('guest-login-section').style.display = '';
+    }
+  }
+};
+
+
+function getGuests() {
+  const auth = getAuth();
+  return auth ? (auth.guests || []) : [];
+}
+
+function addGuestUser() {
+  const userId = (document.getElementById('new-guest-id').value || '').trim();
+  const pwd    = (document.getElementById('new-guest-pwd').value || '').trim();
+  if (!userId || userId.length < 3) { showAlert('add-guest-alert', '⚠️ আইডি কমপক্ষে ৩ অক্ষর', 'info'); return; }
+  if (!pwd || pwd.length < 4)       { showAlert('add-guest-alert', '⚠️ পাসওয়ার্ড কমপক্ষে ৪ অক্ষর', 'info'); return; }
+  const auth = getAuth();
+  if (!auth) return;
+  const guests = auth.guests || [];
+  if (guests.find(g => g.userId.toLowerCase() === userId.toLowerCase())) {
+    showAlert('add-guest-alert', '⚠️ এই আইডি আগে থেকেই আছে', 'info'); return;
+  }
+  guests.push({ userId, pwdHash: hashStr(pwd) });
+  saveAuth({ ...auth, guests });
+  hideModal('add-guest-modal');
+  document.getElementById('new-guest-id').value = '';
+  document.getElementById('new-guest-pwd').value = '';
+  renderGuestList();
+  alert(`✅ গেস্ট আইডি "${userId}" তৈরি হয়েছে!\n\nতাদের জানান:\nআইডি: ${userId}\nপাসওয়ার্ড: (আপনি যা দিয়েছেন)\nলিংক: ${location.href}`);
+}
+
+function deleteGuestUser(userId) {
+  customConfirm({
+    icon: '👥', title: 'গেস্ট আইডি মুছবেন?',
+    msg: `<strong>${userId}</strong> এর অ্যাক্সেস বন্ধ হয়ে যাবে।<br>তারা আর লগইন করতে পারবে না।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    const auth = getAuth();
+    if (!auth) return;
+    auth.guests = (auth.guests || []).filter(g => g.userId !== userId);
+    saveAuth(auth);
+    renderGuestList();
+  });
+}
+
+function renderGuestList() {
+  const el = document.getElementById('guest-list');
+  if (!el) return;
+  // শুধু অ্যাডমিনের জন্য দেখাও
+  const section = document.getElementById('guest-mgmt-section');
+  if (section) section.style.display = isAdmin() ? '' : 'none';
+  if (!isAdmin()) return;
+
+  const guests = getGuests();
+  if (guests.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:8px">কোনো গেস্ট আইডি নেই</div>';
+    return;
+  }
+  el.innerHTML = guests.map(g => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f6ff;border-radius:8px;padding:8px 12px;margin-bottom:6px">
+      <div>
+        <span style="font-size:15px">👁️</span>
+        <strong style="margin-left:6px;font-size:13px">${g.userId}</strong>
+        <span style="font-size:11px;color:#888;margin-left:6px">— শুধু দেখার অনুমতি</span>
+      </div>
+      <button onclick="deleteGuestUser('${g.userId}')" style="background:#FF4444;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">🗑️</button>
+    </div>
+  `).join('');
+}
+
+// settings খোলার সময় guest list রেন্ডার করো
+const _origShowModal = showModal;
+function showModal(id) {
+  _origShowModal(id);
+  if (id === 'info-modal') renderGuestList();
+}
+
+
 function doLogout() {
   if (!confirm('লগআউট করবেন?')) return;
   clearSession();
@@ -1262,17 +1722,18 @@ function doChangeAuth() {
 function bootAuth() {
   const auth = getAuth();
   if (!auth) {
-    // প্রথমবার — সেটআপ ট্যাব দেখাও
-    document.querySelectorAll('.login-tab')[1].click();
+    // প্রথমবার — সেটআপ ট্যাব দেখাও ও সরাসরি সেটআপে নিয়ে যাও
     document.getElementById('reg-tab-btn').style.display = '';
+    document.querySelectorAll('.login-tab')[2].click();
     return;
   }
   // সেশন ভ্যালিড থাকলে সরাসরি ঢুকে যাও
-  if (isSessionValid()) {
-    unlockApp();
+  const sessionRole = isSessionValid();
+  if (sessionRole) {
+    unlockApp(sessionRole);
     return;
   }
-  // সেটআপ ট্যাব লুকাও (আইডি আছে)
+  // সেটআপ ট্যাব সম্পূর্ণ লুকানো থাকবে
   document.getElementById('reg-tab-btn').style.display = 'none';
   initFingerprint();
 }
@@ -1293,8 +1754,42 @@ function initApp() {
   if (saved) setTheme(saved);
 }
 
-// Page load
-window.addEventListener('load', bootAuth);
+// ===================== CUSTOM CONFIRMATION MODAL =====================
+let _confirmCallback = null;
+
+function customConfirm({ icon = '⚠️', title = 'নিশ্চিত করুন', msg = '', okText = '✅ হ্যাঁ', okClass = '', cancelText = '❌ বাতিল' } = {}) {
+  return new Promise(resolve => {
+    _confirmCallback = resolve;
+    document.getElementById('confirm-modal-icon').textContent  = icon;
+    document.getElementById('confirm-modal-title').textContent = title;
+    document.getElementById('confirm-modal-msg').innerHTML     = msg;
+    const okBtn = document.getElementById('confirm-btn-ok');
+    okBtn.textContent = okText;
+    okBtn.className   = okClass || '';
+    document.getElementById('confirm-btn-cancel').textContent = cancelText;
+
+    // বাটনে listener সেট
+    okBtn.onclick = () => closeConfirm(true);
+    document.getElementById('confirm-btn-cancel').onclick = () => closeConfirm(false);
+
+    const overlay = document.getElementById('confirm-modal-overlay');
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('show'));
+  });
+}
+
+function closeConfirm(result) {
+  const overlay = document.getElementById('confirm-modal-overlay');
+  overlay.classList.remove('show');
+  setTimeout(() => { overlay.style.display = 'none'; }, 200);
+  if (typeof _confirmCallback === 'function') {
+    const cb = _confirmCallback;
+    _confirmCallback = null;
+    cb(result);
+  }
+}
+
+
 
 // ===================== FIREBASE CONFIG & SYNC =====================
 const firebaseConfig = {
@@ -1673,9 +2168,22 @@ function saveEntry() {
   const data = loadData();
   const ei = data.findIndex(r=>r.year===rec.year&&r.month===rec.month&&r.shopNo===rec.shopNo);
   if(ei>=0) {
-    if(!confirm('আগের রেকর্ড আছে। আপডেট করবেন?')) return;
-    rec.id = data[ei].id; data[ei] = rec;
-  } else data.push(rec);
+    customConfirm({
+      icon: '✏️', title: 'রেকর্ড আপডেট করবেন?',
+      msg: `<strong>${rec.shopNo} — ${rec.month} ${rec.year}</strong><br><br>এই মাসের রেকর্ড আগে থেকেই আছে।<br>নতুন তথ্য দিয়ে আপডেট করবেন?`,
+      okText: '✅ আপডেট করুন', okClass: 'blue',
+      cancelText: '↩️ বাতিল'
+    }).then(ok => {
+      if (!ok) return;
+      rec.id = data[ei].id; data[ei] = rec;
+      saveData(data);
+      showAlert('entry-alert','✅ সফলভাবে আপডেট হয়েছে!','success');
+      ['e-electric','e-prev-due','e-received'].forEach(id => document.getElementById(id).value=0);
+      calcTotal();
+    });
+    return;
+  }
+  data.push(rec);
   saveData(data);
   showAlert('entry-alert','✅ সফলভাবে সেভ হয়েছে!','success');
   ['e-electric','e-prev-due','e-received'].forEach(id => document.getElementById(id).value=0);
@@ -1724,17 +2232,60 @@ function renderRecords() {
   const month = document.getElementById('rec-month').value;
   let data = loadData().filter(r=>r.year==year);
   if(month) data = data.filter(r=>r.month==month);
-  let tbody = data.length===0 ? '<tr><td colspan="7" style="color:#999;padding:20px;text-align:center">কোনো রেকর্ড নেই</td></tr>' : '';
+  const adminBtns = isAdmin() ? `<th>অ্যাকশন</th>` : '';
+  document.querySelector('#rec-tbody').closest('table').querySelector('thead tr').innerHTML =
+    `<th>মাস</th><th>দোকান</th><th>মালিক</th><th>পাওনা</th><th>আদায়</th><th>বকেয়া</th>${adminBtns}`;
+  let tbody = data.length===0 ? `<tr><td colspan="${isAdmin()?7:6}" style="color:#999;padding:20px;text-align:center">কোনো রেকর্ড নেই</td></tr>` : '';
   data.forEach(r => {
-    tbody += `<tr><td>${r.month}</td><td>${r.shopNo}</td><td style="text-align:left">${r.owner}</td><td>৳${r.total}</td><td>৳${r.received}</td>
+    const actionBtns = isAdmin() ? `<td style="white-space:nowrap">
+      <button class="btn btn-primary btn-sm" onclick="editRecord(${r.id})" style="margin-right:4px">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord(${r.id})">🗑️</button>
+    </td>` : '';
+    tbody += `<tr>
+      <td>${r.month}</td><td>${r.shopNo}</td><td style="text-align:left">${r.owner}</td>
+      <td>৳${r.total}</td><td>৳${r.received}</td>
       <td>${r.due>0?`<span class="due-badge">৳${r.due}</span>`:`<span class="paid-badge">✓</span>`}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteRecord(${r.id})">🗑️</button></td></tr>`;
+      ${actionBtns}</tr>`;
   });
   document.getElementById('rec-tbody').innerHTML = tbody;
 }
+function editRecord(id) {
+  const rec = loadData().find(r => r.id == id);
+  if (!rec) return;
+  // এন্ট্রি পেজে নিয়ে যাও এবং ফর্ম পূরণ করো
+  showPage('page-entry');
+  document.getElementById('e-year').value    = rec.year;
+  document.getElementById('e-month').value   = rec.month;
+  document.getElementById('e-shop').value    = rec.shopNo;
+  fillShopInfo();
+  setTimeout(() => {
+    document.getElementById('e-electric').value  = rec.electric || 0;
+    document.getElementById('e-prev-due').value  = rec.prevDue  || 0;
+    document.getElementById('e-received').value  = rec.received || 0;
+    document.getElementById('e-date').value      = rec.date     || '';
+    document.getElementById('e-remark').value    = rec.remark   || '';
+    calcTotal();
+    // হাইলাইট করো
+    document.querySelector('#page-entry .card').style.boxShadow = '0 0 0 3px #2E75B6';
+    setTimeout(() => document.querySelector('#page-entry .card').style.boxShadow = '', 2000);
+    showAlert('entry-alert', '✏️ রেকর্ড লোড হয়েছে। পরিবর্তন করে সেভ করুন।', 'info');
+  }, 100);
+}
 function deleteRecord(id) {
-  if(!confirm('মুছে ফেলবেন?')) return;
-  saveData(loadData().filter(r=>r.id!==id)); renderRecords();
+  const data = loadData();
+  const rec = data.find(r => r.id == id);
+  const label = rec ? `${rec.shopNo} — ${rec.month} ${rec.year}` : '';
+  customConfirm({
+    icon: '🗑️', title: 'রেকর্ড মুছবেন?',
+    msg: `<strong>${label}</strong><br><br>এই ভাড়া রেকর্ডটি স্থায়ীভাবে মুছে যাবে।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', okClass: '',
+    cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    saveData(loadData().filter(r => r.id != id));
+    renderRecords && renderRecords();
+    renderDashboard();
+  });
 }
 
 // ===================== MONTHLY REPORT =====================
@@ -1943,23 +2494,89 @@ function renderExpenses() {
     <div class="kpi-box orange" style="grid-column:span 1"><div class="kpi-label">এন্ট্রি সংখ্যা</div><div class="kpi-value" style="font-size:16px">${exps.length}টি</div></div>
     <div class="kpi-box blue" style="grid-column:span 1"><div class="kpi-label">ধরনের সংখ্যা</div><div class="kpi-value" style="font-size:16px">${cats.length}টি</div></div>`;
 
-  let tbody = exps.length===0 ? '<tr><td colspan="5" style="color:#999;padding:20px;text-align:center">কোনো খরচ নেই</td></tr>' : '';
+  let tbody = exps.length===0 ? `<tr><td colspan="${isAdmin()?5:4}" style="color:#999;padding:20px;text-align:center">কোনো খরচ নেই</td></tr>` : '';
+  // গেস্টের জন্য কলাম হেডার আপডেট
+  const expTable = document.querySelector('#exp-tbody').closest('table');
+  if (expTable) {
+    expTable.querySelector('thead tr').innerHTML = isAdmin()
+      ? '<th>তারিখ</th><th>ধরন</th><th>বিবরণ</th><th>টাকা</th><th>অ্যাকশন</th>'
+      : '<th>তারিখ</th><th>ধরন</th><th>বিবরণ</th><th>টাকা</th>';
+  }
   exps.forEach(e => {
     const bg = CAT_COLORS[e.cat]||'#f5f5f5';
+    const actionBtns = isAdmin() ? `<td style="white-space:nowrap">
+      <button class="btn btn-primary btn-sm" onclick="editExpense(${e.id})" style="margin-right:4px">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteExpense(${e.id})">🗑️</button>
+    </td>` : '';
     tbody += `<tr>
       <td style="font-size:12px">${e.month}<br>${e.date||''}</td>
       <td><span style="background:${bg};padding:2px 6px;border-radius:8px;font-size:11px">${e.cat}</span></td>
       <td style="text-align:left;font-size:12px">${e.desc||'—'}</td>
       <td style="color:#CC0000;font-weight:bold">৳${e.amount}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteExpense(${e.id})">🗑️</button></td></tr>`;
+      ${actionBtns}</tr>`;
   });
   document.getElementById('exp-tbody').innerHTML = tbody;
+  // গেস্টের জন্য "+ নতুন খরচ" বাটন লুকাও
+  const addExpBtn = document.querySelector('#page-expense .section-title .btn-warning');
+  if (addExpBtn) addExpBtn.style.display = isAdmin() ? '' : 'none';
+}
+
+function editExpense(id) {
+  const exp = loadExpenses().find(e => e.id == id);
+  if (!exp) return;
+  // modal খুলে ফর্ম পূরণ করো
+  showModal('add-expense-modal');
+  document.getElementById('exp-e-year').value   = exp.year;
+  document.getElementById('exp-e-month').value  = exp.month;
+  document.getElementById('exp-e-cat').value    = exp.cat;
+  document.getElementById('exp-e-desc').value   = exp.desc || '';
+  document.getElementById('exp-e-amount').value = exp.amount;
+  document.getElementById('exp-e-date').value   = exp.date || '';
+  document.getElementById('exp-e-note').value   = exp.note || '';
+  // modal title ও save button আপডেট করো
+  document.querySelector('#add-expense-modal h3').textContent = '✏️ খরচ এডিট করুন';
+  const saveBtn = document.querySelector('#add-expense-modal .btn-success');
+  saveBtn.textContent = '💾 আপডেট করুন';
+  saveBtn.onclick = () => updateExpense(id);
+}
+
+function updateExpense(id) {
+  const amount = parseFloat(document.getElementById('exp-e-amount').value)||0;
+  if (!amount) { alert('⚠️ টাকার পরিমাণ দিন'); return; }
+  const exps = loadExpenses();
+  const idx = exps.findIndex(e => e.id == id);
+  if (idx === -1) return;
+  exps[idx] = { ...exps[idx],
+    year:   document.getElementById('exp-e-year').value,
+    month:  document.getElementById('exp-e-month').value,
+    cat:    document.getElementById('exp-e-cat').value,
+    desc:   document.getElementById('exp-e-desc').value,
+    amount,
+    date:   document.getElementById('exp-e-date').value,
+    note:   document.getElementById('exp-e-note').value,
+  };
+  saveExpenses(exps);
+  hideModal('add-expense-modal');
+  // modal reset করো
+  document.querySelector('#add-expense-modal h3').textContent = '💸 নতুন খরচ যোগ করুন';
+  const saveBtn = document.querySelector('#add-expense-modal .btn-success');
+  saveBtn.textContent = '✅ সেভ করুন';
+  saveBtn.onclick = saveExpense;
+  renderExpenses();
 }
 
 function deleteExpense(id) {
-  if(!confirm('এই খরচ মুছবেন?')) return;
-  saveExpenses(loadExpenses().filter(e=>e.id!==id));
-  renderExpenses();
+  const exp = loadExpenses().find(e => e.id == id);
+  const label = exp ? `${exp.cat} — ৳${exp.amount}` : '';
+  customConfirm({
+    icon: '🗑️', title: 'খরচ মুছবেন?',
+    msg: `<strong>${label}</strong><br><br>এই খরচের রেকর্ড স্থায়ীভাবে মুছে যাবে।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    saveExpenses(loadExpenses().filter(e => e.id != id));
+    renderExpenses();
+  });
 }
 
 // ===================== SHOPS =====================
@@ -2114,9 +2731,19 @@ function saveEditShop() {
 }
 
 function deleteShop(idx) {
-  const shops=getShops();
-  if(!confirm(`"${shops[idx].no}" মুছবেন? পুরনো রেকর্ড থাকবে।`)) return;
-  shops.splice(idx,1); saveShops(shops); renderShops(); initShopDropdown();
+  const shops = getShops();
+  const shop = shops[idx];
+  customConfirm({
+    icon: '🏪', title: 'দোকান মুছবেন?',
+    msg: `<strong>${shop.no} — ${shop.name}</strong><br><br>দোকানটি তালিকা থেকে মুছে যাবে।<br>পুরনো ভাড়া রেকর্ড থাকবে।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    shops.splice(idx, 1);
+    saveShops(shops);
+    renderShops();
+    initShopDropdown();
+  });
 }
 
 // ===================== EXPORT / IMPORT =====================
@@ -2174,9 +2801,28 @@ function importFromJSON(input) {
 }
 
 function clearAllData() {
-  if(!confirm('সব রেকর্ড ও খরচ মুছবেন? দোকান তালিকা থাকবে।')) return;
-  localStorage.removeItem('rent_records'); localStorage.removeItem('expenses');
-  hideModal('info-modal'); renderDashboard(); alert('মুছে ফেলা হয়েছে।');
+  customConfirm({
+    icon: '⚠️', title: 'সব ডেটা মুছবেন?',
+    msg: `সমস্ত ভাড়া রেকর্ড ও খরচের তথ্য <strong>স্থায়ীভাবে মুছে যাবে।</strong><br><br>দোকান তালিকা ও সেটিংস থাকবে।<br><br>⚠️ এই কাজ পূর্বাবস্থায় ফেরানো যাবে না!`,
+    okText: '🗑️ হ্যাঁ, সব মুছুন', okClass: '',
+    cancelText: '↩️ না, রাখুন'
+  }).then(ok => {
+    if (!ok) return;
+    // দ্বিতীয় confirmation
+    customConfirm({
+      icon: '🚨', title: 'সত্যিই নিশ্চিত?',
+      msg: `আপনার <strong>সব ভাড়া ও খরচের ডেটা</strong> মুছে যাবে।<br>আগে ব্যাকআপ নিয়েছেন তো?`,
+      okText: '🗑️ মুছুন', okClass: '',
+      cancelText: '↩️ বাতিল'
+    }).then(ok2 => {
+      if (!ok2) return;
+      localStorage.removeItem('rent_records');
+      localStorage.removeItem('expenses');
+      if (fbSyncEnabled && fbDb) { fbDb.ref('records').set([]); fbDb.ref('expenses').set([]); }
+      hideModal('info-modal');
+      renderDashboard();
+    });
+  });
 }
 
 function download(blob,filename){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename;a.click();URL.revokeObjectURL(u);}
@@ -2395,7 +3041,322 @@ function saveDriveClientId() {
   showDriveStatus('✅ Client ID সেভ হয়েছে! এখন Drive বাটন ক্লিক করুন।', 'success');
 }
 
-// ===================== NOTES & LOANS =====================
+// ===================== BULK DELETE =====================
+let _bulkDeleteMode = 'month';
+
+function switchBdTab(tab) {
+  _bulkDeleteMode = tab;
+  document.getElementById('bd-month-section').style.display = tab === 'month' ? '' : 'none';
+  document.getElementById('bd-shop-section').style.display  = tab === 'shop'  ? '' : 'none';
+  document.getElementById('bd-tab-month').style.background  = tab === 'month' ? '#2E75B6' : 'white';
+  document.getElementById('bd-tab-month').style.color       = tab === 'month' ? 'white' : '#555';
+  document.getElementById('bd-tab-month').style.borderColor = tab === 'month' ? '#2E75B6' : '#ddd';
+  document.getElementById('bd-tab-shop').style.background   = tab === 'shop'  ? '#2E75B6' : 'white';
+  document.getElementById('bd-tab-shop').style.color        = tab === 'shop'  ? 'white' : '#555';
+  document.getElementById('bd-tab-shop').style.borderColor  = tab === 'shop'  ? '#2E75B6' : '#ddd';
+  document.getElementById('bd-preview').innerHTML = '';
+  document.getElementById('bd-confirm-btn').style.display = 'none';
+}
+
+function initBulkDeleteModal() {
+  // দোকান ড্রপডাউন পপুলেট করো
+  const shopSel = document.getElementById('bd-shop');
+  shopSel.innerHTML = '<option value="">— দোকান বেছে নিন —</option>';
+  getShops().forEach(s => {
+    shopSel.innerHTML += `<option value="${s.no}">${s.no} — ${s.name}</option>`;
+  });
+  document.getElementById('bd-preview').innerHTML = '';
+  document.getElementById('bd-confirm-btn').style.display = 'none';
+  switchBdTab('month');
+}
+
+function getFilteredRecords() {
+  const all = loadData();
+  if (_bulkDeleteMode === 'month') {
+    const year  = document.getElementById('bd-year').value;
+    const month = document.getElementById('bd-month').value;
+    return all.filter(r => r.year == year && (month === '' || r.month === month));
+  } else {
+    const shop  = document.getElementById('bd-shop').value;
+    const year  = document.getElementById('bd-shop-year').value;
+    const month = document.getElementById('bd-shop-month').value;
+    if (!shop) return [];
+    return all.filter(r =>
+      r.shopNo === shop &&
+      (year  === '' || r.year  == year) &&
+      (month === '' || r.month === month)
+    );
+  }
+}
+
+function previewBulkDelete(mode) {
+  _bulkDeleteMode = mode;
+  const matched = getFilteredRecords();
+  const previewEl = document.getElementById('bd-preview');
+  const confirmBtn = document.getElementById('bd-confirm-btn');
+
+  if (matched.length === 0) {
+    previewEl.innerHTML = `<div style="padding:12px;background:#fff3cd;border-left:4px solid #ED7D31;border-radius:8px;font-size:13px">
+      ⚠️ এই ফিল্টারে কোনো রেকর্ড পাওয়া যায়নি।
+    </div>`;
+    confirmBtn.style.display = 'none';
+    return;
+  }
+
+  // প্রিভিউ টেবিল তৈরি
+  const rows = matched.slice(0, 10).map(r =>
+    `<tr>
+      <td style="padding:5px 8px">${r.shopNo}</td>
+      <td style="padding:5px 8px">${r.owner || '—'}</td>
+      <td style="padding:5px 8px">${r.month} ${r.year}</td>
+      <td style="padding:5px 8px;text-align:right">৳${r.received}</td>
+    </tr>`
+  ).join('');
+
+  const more = matched.length > 10 ? `<div style="font-size:12px;color:#888;text-align:center;padding:4px">... আরো ${matched.length - 10}টি রেকর্ড</div>` : '';
+
+  previewEl.innerHTML = `
+    <div style="background:#f8d7da;border-left:4px solid #FF4444;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">
+      ⚠️ <strong>${matched.length}টি রেকর্ড</strong> মুছে যাবে। নিচে দেখুন:
+    </div>
+    <div style="max-height:200px;overflow-y:auto;border:1px solid #ddd;border-radius:8px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead style="background:#1F3864;color:white;position:sticky;top:0">
+          <tr><th style="padding:6px 8px;text-align:left">দোকান</th><th style="padding:6px 8px;text-align:left">মালিক</th><th style="padding:6px 8px;text-align:left">মাস</th><th style="padding:6px 8px;text-align:right">আদায়</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${more}
+    </div>`;
+
+  confirmBtn.style.display = '';
+  confirmBtn.textContent = `🗑️ ${matched.length}টি রেকর্ড মুছুন`;
+}
+
+function executeBulkDelete() {
+  const matched = getFilteredRecords();
+  if (matched.length === 0) return;
+
+  const ids = new Set(matched.map(r => r.id));
+  customConfirm({
+    icon: '🗑️',
+    title: `${matched.length}টি রেকর্ড মুছবেন?`,
+    msg: `এই রেকর্ডগুলো <strong>স্থায়ীভাবে মুছে যাবে।</strong><br>এই কাজ পূর্বাবস্থায় ফেরানো যাবে না!`,
+    okText: `🗑️ হ্যাঁ, ${matched.length}টি মুছুন`,
+    cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    const remaining = loadData().filter(r => !ids.has(r.id));
+    saveData(remaining);
+    if (fbSyncEnabled && fbDb) fbSet('records', remaining);
+    hideModal('bulk-delete-modal');
+    renderDashboard();
+    renderRecords && renderRecords();
+
+    // success toast
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1F3864;color:white;padding:12px 20px;border-radius:12px;font-size:13px;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+    toast.textContent = `✅ ${matched.length}টি রেকর্ড মুছে গেছে`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  });
+}
+
+// bulk-delete-modal খোলার সময় init করো
+const _origShowModalBD = showModal;
+showModal = function(id) {
+  _origShowModalBD(id);
+  if (id === 'bulk-delete-modal') initBulkDeleteModal();
+};
+
+
+function importFromExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('excel-import-status');
+
+  const showStatus = (msg, type) => {
+    const bg = { success:'#d4edda', info:'#d1ecf1', danger:'#f8d7da', warning:'#fff3cd' };
+    const bd = { success:'#70AD47', info:'#2E75B6', danger:'#FF4444', warning:'#ED7D31' };
+    statusEl.innerHTML = `<div style="padding:10px 12px;background:${bg[type]};border-left:4px solid ${bd[type]};border-radius:6px;font-size:13px;line-height:1.6">${msg}</div>`;
+  };
+
+  showStatus('⏳ ফাইল পড়া হচ্ছে...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let rows = [];
+
+      if (file.name.endsWith('.csv')) {
+        // CSV পার্স
+        const text = e.target.result;
+        const lines = text.split('\n').filter(l => l.trim());
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g,''));
+          if (vals.length < 3) continue;
+          const row = {};
+          headers.forEach((h, idx) => row[h] = vals[idx] || '');
+          rows.push(row);
+        }
+      } else {
+        // XLSX পার্স
+        if (typeof XLSX === 'undefined') {
+          showStatus('❌ SheetJS লাইব্রেরি লোড হয়নি। ইন্টারনেট চেক করুন।', 'danger');
+          return;
+        }
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+
+        // "ভাড়া এন্ট্রি" শিট খোঁজো, না পেলে প্রথম শিট
+        const sheetName = wb.SheetNames.find(n => n.includes('ভাড়া') || n.toLowerCase().includes('rent')) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // হেডার সারি খোঁজো — year/month/বছর/মাস/shopno যেকোনো একটা থাকলেই হবে
+        const HEADER_KEYWORDS = ['year','বছর','month','মাস','shopno','shop','দোকান','owner','মালিক','fixed','ভাড়া'];
+        let headerRow = -1;
+        for (let i = 0; i < Math.min(15, allRows.length); i++) {
+          const r = allRows[i].map(c => String(c).toLowerCase().replace(/\n.*/,'').trim());
+          const matched = r.filter(cell => HEADER_KEYWORDS.some(k => cell.includes(k)));
+          if (matched.length >= 2) { // কমপক্ষে ২টা keyword মিললে header
+            headerRow = i; break;
+          }
+        }
+        if (headerRow === -1) {
+          // শেষ চেষ্টা — যেকোনো ১টা keyword
+          for (let i = 0; i < Math.min(15, allRows.length); i++) {
+            const r = allRows[i].map(c => String(c).toLowerCase().replace(/\n.*/,'').trim());
+            if (HEADER_KEYWORDS.some(k => r.some(cell => cell.includes(k)))) {
+              headerRow = i; break;
+            }
+          }
+        }
+        if (headerRow === -1) {
+          showStatus('❌ হেডার সারি পাওয়া যায়নি। টেমপ্লেট ফাইল সঠিকভাবে ব্যবহার করুন।', 'danger');
+          return;
+        }
+
+        // হেডার normalize — newline ও extra text বাদ দাও
+        const headers = allRows[headerRow].map(h => String(h).toLowerCase().replace(/\n.*/,'').trim());
+
+        // data শুরু হয় headerRow+1 থেকে, কিন্তু উদাহরণ সারি skip করি
+        // উদাহরণ সারি চেনা যায় "যেমন" বা "উদাহরণ" বা "YYYY" থাকলে
+        let dataStartRow = headerRow + 1;
+        for (let i = headerRow + 1; i < Math.min(headerRow + 4, allRows.length); i++) {
+          const rowStr = allRows[i].join('').toLowerCase();
+          if (rowStr.includes('যেমন') || rowStr.includes('yyyy') || rowStr.includes('উদাহরণ') ||
+              rowStr.includes('jan/feb') || rowStr.includes('shop-1\nshop-2') || rowStr.includes('required')) {
+            dataStartRow = i + 1;
+          }
+        }
+
+        for (let i = dataStartRow; i < allRows.length; i++) {
+          const vals = allRows[i];
+          if (!vals || vals.every(v => String(v).trim() === '')) continue;
+          const row = {};
+          headers.forEach((h, idx) => row[h] = vals[idx] !== undefined ? String(vals[idx]).trim() : '');
+          rows.push(row);
+        }
+      }
+
+      // কলাম ম্যাপিং — বাংলা ও ইংরেজি উভয় হেডার সাপোর্ট
+      const getVal = (row, ...keys) => {
+        for (const k of keys) {
+          // exact match
+          if (row[k] !== undefined && row[k] !== '') return String(row[k]).trim();
+          // partial match — হেডারে k আছে কিনা
+          const matchKey = Object.keys(row).find(rk => rk.includes(k.toLowerCase()));
+          if (matchKey && row[matchKey] !== '') return String(row[matchKey]).trim();
+        }
+        return '';
+      };
+
+      const VALID_MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+      let added = 0, skipped = 0, errors = [];
+      const existing = loadData();
+      const existingKeys = new Set(existing.map(r => `${r.year}_${r.month}_${r.shopNo}`));
+      const newRecords = [...existing];
+
+      rows.forEach((row, idx) => {
+        const rowNum = idx + 1;
+        const year  = getVal(row, 'year', 'বছর');
+        const month = getVal(row, 'month', 'মাস');
+        const shopNo = getVal(row, 'shopno', 'shop no', 'shop-no', 'দোকান নং', 'দোকান');
+        const owner  = getVal(row, 'owner', 'মালিকের নাম', 'মালিক');
+        const fixed  = parseFloat(getVal(row, 'fixed', 'ফিক্সড ভাড়া', 'ভাড়া')) || 0;
+        const electric = parseFloat(getVal(row, 'electric', 'বিদ্যুৎ বিল', 'বিদ্যুৎ')) || 0;
+        const prevDue  = parseFloat(getVal(row, 'prevdue', 'prev due', 'আগের বকেয়া', 'বকেয়া')) || 0;
+        const received = parseFloat(getVal(row, 'received', 'আদায়কৃত', 'আদায়')) || 0;
+        const date     = getVal(row, 'date', 'তারিখ') || '';
+        const remark   = getVal(row, 'remark', 'মন্তব্য') || '';
+
+        // ভ্যালিডেশন
+        if (!year || !month || !shopNo) {
+          if (year || month || shopNo) errors.push(`সারি ${rowNum}: year/month/shopNo অপূর্ণ`);
+          return;
+        }
+        if (!VALID_MONTHS.includes(month.toLowerCase().substring(0,3))) {
+          errors.push(`সারি ${rowNum}: মাস "${month}" ভুল (Jan-Dec হওয়া উচিত)`);
+          return;
+        }
+
+        const monthNorm = month.charAt(0).toUpperCase() + month.slice(1,3).toLowerCase();
+        const total = fixed + electric + prevDue;
+        const due   = Math.max(0, total - received);
+        const key   = `${year}_${monthNorm}_${shopNo}`;
+
+        if (existingKeys.has(key)) {
+          skipped++; return;
+        }
+
+        existingKeys.add(key);
+        newRecords.push({
+          id: Date.now() + Math.random(),
+          year: String(year),
+          month: monthNorm,
+          shopNo, owner, fixed, electric, prevDue, total, received, due,
+          date: date || '',
+          remark: remark || ''
+        });
+        added++;
+      });
+
+      if (added === 0 && errors.length === 0 && skipped === rows.length) {
+        showStatus(`⚠️ সব রেকর্ড আগে থেকেই আছে (${skipped}টি skip হয়েছে)।`, 'warning');
+        input.value = ''; return;
+      }
+
+      saveData(newRecords);
+      renderDashboard();
+      renderRecords && renderRecords();
+
+      let msg = `✅ <strong>${added}টি রেকর্ড সফলভাবে ইম্পোর্ট হয়েছে!</strong>`;
+      if (skipped > 0) msg += `<br>⏭️ ${skipped}টি আগে থেকে ছিল (skip হয়েছে)`;
+      if (errors.length > 0) msg += `<br>⚠️ ${errors.length}টি সমস্যা:<br><small>${errors.slice(0,5).join('<br>')}</small>`;
+      showStatus(msg, added > 0 ? 'success' : 'warning');
+
+      // Firebase-এ সিঙ্ক
+      if (fbSyncEnabled && added > 0) fbSet('records', newRecords);
+
+    } catch(err) {
+      showStatus(`❌ ফাইল পড়তে সমস্যা: ${err.message}<br>টেমপ্লেট ফাইল সঠিকভাবে পূরণ করেছেন?`, 'danger');
+      console.error(err);
+    }
+  };
+
+  if (file.name.endsWith('.csv')) {
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
+
+  input.value = '';
+}
+
+
 function getNotes() { return JSON.parse(localStorage.getItem('notes_data') || '[]'); }
 function saveNotes(d) { localStorage.setItem('notes_data', JSON.stringify(d)); fbSet('notes', d); }
 function getLoans() { return JSON.parse(localStorage.getItem('loans_data') || '[]'); }
@@ -2515,9 +3476,16 @@ function editNote(id) {
 }
 
 function deleteNote(id) {
-  if (!confirm('এই নোটটি মুছবেন?')) return;
-  saveNotes(getNotes().filter(n => n.id !== id));
-  renderNotes();
+  const note = getNotes().find(n => n.id === id);
+  customConfirm({
+    icon: '📝', title: 'নোট মুছবেন?',
+    msg: `<strong>${note ? note.title || 'এই নোট' : 'এই নোট'}</strong><br><br>নোটটি স্থায়ীভাবে মুছে যাবে।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    saveNotes(getNotes().filter(n => n.id !== id));
+    renderNotes();
+  });
 }
 
 // ---- Loans ----
@@ -2619,9 +3587,16 @@ function editLoan(id) {
 }
 
 function deleteLoan(id) {
-  if (!confirm('এই কর্জের রেকর্ড মুছবেন?')) return;
-  saveLoans(getLoans().filter(l => l.id !== id));
-  renderLoans();
+  const loan = getLoans().find(l => l.id === id);
+  customConfirm({
+    icon: '💰', title: 'কর্জের রেকর্ড মুছবেন?',
+    msg: `<strong>${loan ? loan.person + ' — ৳' + loan.amount : 'এই রেকর্ড'}</strong><br><br>কর্জের রেকর্ডটি স্থায়ীভাবে মুছে যাবে।`,
+    okText: '🗑️ হ্যাঁ, মুছুন', cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    saveLoans(getLoans().filter(l => l.id !== id));
+    renderLoans();
+  });
 }
 
 // init notes
