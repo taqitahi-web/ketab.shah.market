@@ -2392,24 +2392,99 @@ function renderRecords() {
 function editRecord(id) {
   const rec = loadData().find(r => r.id == id);
   if (!rec) return;
-  // এন্ট্রি পেজে নিয়ে যাও এবং ফর্ম পূরণ করো
-  showPage('page-entry');
-  document.getElementById('e-year').value    = rec.year;
-  document.getElementById('e-month').value   = rec.month;
-  document.getElementById('e-shop').value    = rec.shopNo;
-  fillShopInfo();
-  setTimeout(() => {
-    document.getElementById('e-electric').value  = rec.electric || 0;
-    document.getElementById('e-prev-due').value  = rec.prevDue  || 0;
-    document.getElementById('e-received').value  = rec.received || 0;
-    document.getElementById('e-date').value      = rec.date     || '';
-    document.getElementById('e-remark').value    = rec.remark   || '';
-    calcTotal();
-    // হাইলাইট করো
-    document.querySelector('#page-entry .card').style.boxShadow = '0 0 0 3px #2E75B6';
-    setTimeout(() => document.querySelector('#page-entry .card').style.boxShadow = '', 2000);
-    showAlert('entry-alert', '✏️ রেকর্ড লোড হয়েছে। পরিবর্তন করে সেভ করুন।', 'info');
-  }, 100);
+
+  // Edit modal দিয়ে করবো — page navigate করবো না
+  // আগে modal আছে কিনা দেখো, না থাকলে তৈরি করো
+  let modal = document.getElementById('edit-record-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'edit-record-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal">
+        <h3>✏️ ভাড়া রেকর্ড এডিট</h3>
+        <div class="form-row">
+          <div class="form-group"><label>বছর</label><input type="text" id="er-year" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" readonly></div>
+          <div class="form-group"><label>মাস</label><input type="text" id="er-month" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" readonly></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>দোকান</label><input type="text" id="er-shop" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" readonly></div>
+          <div class="form-group"><label>মালিক</label><input type="text" id="er-owner" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" readonly></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>বিদ্যুৎ বিল</label><input type="number" id="er-electric" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" oninput="calcErTotal()"></div>
+          <div class="form-group"><label>আগের বকেয়া</label><input type="number" id="er-prevdue" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" oninput="calcErTotal()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>ফিক্সড ভাড়া</label><input type="number" id="er-fixed" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" oninput="calcErTotal()"></div>
+          <div class="form-group"><label>মোট পাওনা</label><input type="number" id="er-total" style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;background:#f5f5f5" readonly></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>আদায়কৃত</label><input type="number" id="er-received" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px" oninput="calcErTotal()"></div>
+          <div class="form-group"><label>বকেয়া</label><input type="number" id="er-due" style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;background:#f5f5f5" readonly></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>তারিখ</label><input type="date" id="er-date" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px"></div>
+          <div class="form-group"><label>মন্তব্য</label><input type="text" id="er-remark" style="width:100%;padding:10px;border:1.5px solid #BDD7EE;border-radius:8px;font-size:14px"></div>
+        </div>
+        <input type="hidden" id="er-id">
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="hideModal('edit-record-modal')">বাতিল</button>
+          <button class="btn btn-success" onclick="saveEditRecord()">💾 আপডেট করুন</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+
+  // ফর্মে ডেটা ভরো
+  document.getElementById('er-id').value       = rec.id;
+  document.getElementById('er-year').value     = rec.year;
+  document.getElementById('er-month').value    = rec.month;
+  document.getElementById('er-shop').value     = rec.shopNo;
+  document.getElementById('er-owner').value    = rec.owner || '';
+  document.getElementById('er-fixed').value    = rec.fixed || 0;
+  document.getElementById('er-electric').value = rec.electric || 0;
+  document.getElementById('er-prevdue').value  = rec.prevDue || 0;
+  document.getElementById('er-total').value    = rec.total || 0;
+  document.getElementById('er-received').value = rec.received || 0;
+  document.getElementById('er-due').value      = rec.due || 0;
+  document.getElementById('er-date').value     = rec.date || '';
+  document.getElementById('er-remark').value   = rec.remark || '';
+  showModal('edit-record-modal');
+}
+
+function calcErTotal() {
+  const fixed    = parseFloat(document.getElementById('er-fixed').value)    || 0;
+  const electric = parseFloat(document.getElementById('er-electric').value) || 0;
+  const prevdue  = parseFloat(document.getElementById('er-prevdue').value)  || 0;
+  const received = parseFloat(document.getElementById('er-received').value) || 0;
+  const total = fixed + electric + prevdue;
+  document.getElementById('er-total').value = total;
+  document.getElementById('er-due').value   = Math.max(0, total - received);
+}
+
+function saveEditRecord() {
+  const id       = document.getElementById('er-id').value;
+  const fixed    = parseFloat(document.getElementById('er-fixed').value)    || 0;
+  const electric = parseFloat(document.getElementById('er-electric').value) || 0;
+  const prevDue  = parseFloat(document.getElementById('er-prevdue').value)  || 0;
+  const received = parseFloat(document.getElementById('er-received').value) || 0;
+  const total    = fixed + electric + prevDue;
+  const due      = Math.max(0, total - received);
+
+  const data = loadData();
+  const idx  = data.findIndex(r => r.id == id);
+  if (idx === -1) return;
+
+  data[idx] = { ...data[idx], fixed, electric, prevDue, total, received, due,
+    date:   document.getElementById('er-date').value,
+    remark: document.getElementById('er-remark').value,
+  };
+  saveData(data);
+  if (fbSyncEnabled) fbSet('records', data);
+  hideModal('edit-record-modal');
+  renderRecords && renderRecords();
+  renderDashboard();
 }
 function deleteRecord(id) {
   const data = loadData();
