@@ -199,6 +199,32 @@ tr:nth-child(even) td { background: #f0f6ff; }
 /* সেটিংসে পাসওয়ার্ড সেকশন */
 .auth-setting-box { background: #f0f6ff; border-left: 4px solid var(--secondary); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
 .auth-id-display { font-size: 22px; font-weight: bold; color: var(--primary); letter-spacing: 3px; font-family: monospace; }
+
+/* ===== TOAST NOTIFICATION ===== */
+#toast-container {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none; width: 90%; max-width: 380px;
+}
+.toast {
+  background: white; border-radius: 14px; padding: 14px 18px;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.22); display: flex; align-items: center; gap: 12px;
+  width: 100%; pointer-events: auto;
+  animation: toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards;
+  border-left: 5px solid #70AD47;
+}
+.toast.toast-success { border-left-color: #70AD47; }
+.toast.toast-error   { border-left-color: #FF4444; }
+.toast.toast-info    { border-left-color: #2E75B6; }
+.toast.toast-warning { border-left-color: #ED7D31; }
+.toast-icon { font-size: 26px; flex-shrink: 0; }
+.toast-body { flex: 1; }
+.toast-title { font-weight: bold; font-size: 14px; color: #1F3864; line-height: 1.3; }
+.toast-msg   { font-size: 12px; color: #555; margin-top: 2px; }
+.toast-close { font-size: 18px; color: #aaa; cursor: pointer; flex-shrink: 0; background: none; border: none; padding: 0 2px; }
+.toast.toast-out { animation: toastOut 0.3s ease forwards; }
+@keyframes toastIn  { from { opacity:0; transform:translateY(-20px) scale(0.92); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes toastOut { from { opacity:1; transform:scale(1); } to { opacity:0; transform:scale(0.9); max-height:0; padding:0; margin:0; } }
 </style>
 </head>
 <body class="locked">
@@ -319,6 +345,9 @@ tr:nth-child(even) td { background: #f0f6ff; }
 </div>
 
 <!-- ===== CUSTOM CONFIRMATION MODAL ===== -->
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container"></div>
+
 <div id="confirm-modal-overlay">
   <div id="confirm-modal-box">
     <div id="confirm-modal-icon">⚠️</div>
@@ -1839,6 +1868,28 @@ function initApp() {
   if (saved) setTheme(saved);
 }
 
+// ===================== TOAST NOTIFICATION =====================
+function showToast({ title = '', msg = '', type = 'success', duration = 3000 } = {}) {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `
+    <div class="toast-icon">${icons[type]}</div>
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(t);
+  setTimeout(() => {
+    t.classList.add('toast-out');
+    setTimeout(() => t.remove(), 350);
+  }, duration);
+}
+
 // ===================== CUSTOM CONFIRMATION MODAL =====================
 let _confirmCallback = null;
 
@@ -2183,7 +2234,7 @@ function saveMarketInfo() {
   };
   saveMarketInfoToStorage(info);
   hideModal('info-modal');
-  alert('✅ মার্কেটের তথ্য সংরক্ষিত হয়েছে!');
+  showToast({ title: 'মার্কেটের তথ্য সেভ হয়েছে! 🏪', type: 'success' });
 }
 
 // ===================== থিম ফাংশন =====================
@@ -2318,6 +2369,7 @@ function saveEntry() {
       rec.id = data[ei].id; data[ei] = rec;
       saveData(data);
       showAlert('entry-alert','✅ সফলভাবে আপডেট হয়েছে!','success');
+      showToast({ title: 'রেকর্ড আপডেট হয়েছে! ✏️', msg: `${rec.shopNo} — ${rec.month} ${rec.year} | আদায়: ৳${rec.received}`, type: 'info' });
       ['e-electric','e-prev-due','e-received'].forEach(id => document.getElementById(id).value=0);
       calcTotal();
     });
@@ -2326,6 +2378,7 @@ function saveEntry() {
   data.push(rec);
   saveData(data);
   showAlert('entry-alert','✅ সফলভাবে সেভ হয়েছে!','success');
+  showToast({ title: 'ভাড়া সেভ হয়েছে! 🎉', msg: `${rec.shopNo} — ${rec.month} ${rec.year} | আদায়: ৳${rec.received}`, type: 'success' });
   ['e-electric','e-prev-due','e-received'].forEach(id => document.getElementById(id).value=0);
   calcTotal();
 }
@@ -2638,6 +2691,7 @@ function savePartnerSettings() {
     p2: { name: document.getElementById('p2-name').value||'পার্টনার ২', share: p2share },
   });
   hideModal('partner-settings-modal');
+  showToast({ title: 'পার্টনার সেটিং সেভ হয়েছে! 🤝', type: 'success' });
   renderPartner();
 }
 
@@ -2686,6 +2740,7 @@ function saveExpense() {
   exps.push(exp);
   saveExpenses(exps);
   hideModal('add-expense-modal');
+  showToast({ title: 'খরচ সেভ হয়েছে! 💸', msg: `${exp.cat} — ৳${exp.amount} | ${exp.month} ${exp.year}`, type: 'success' });
   document.getElementById('exp-e-desc').value='';
   document.getElementById('exp-e-amount').value='';
   document.getElementById('exp-e-note').value='';
@@ -3644,6 +3699,7 @@ function saveNote() {
   }
   saveNotes(notes);
   hideModal('add-note-modal');
+  showToast({ title: 'নোট সেভ হয়েছে! 📝', msg: noteObj.title, type: 'success' });
   renderNotes();
 }
 
@@ -3752,6 +3808,7 @@ function saveLoan() {
   }
   saveLoans(loans);
   hideModal('add-loan-modal');
+  showToast({ title: 'কর্জ সেভ হয়েছে! 💰', msg: `${obj.person} — ৳${obj.amount.toLocaleString()}`, type: 'warning' });
   renderLoans();
 }
 
