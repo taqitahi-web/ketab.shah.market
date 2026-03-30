@@ -731,6 +731,64 @@ tr:nth-child(even) td { background: #f4f8ff; }
   </div>
 </div>
 
+<!-- MODAL: QUICK PAYMENT UPDATE -->
+<div class="modal-overlay" id="quick-pay-modal">
+  <div class="modal">
+    <h3>💰 আদায় আপডেট করুন</h3>
+
+    <!-- রেকর্ড সারসংক্ষেপ -->
+    <div id="qp-summary" style="background:#f0f6ff;border-radius:12px;padding:12px 14px;margin-bottom:14px;border-left:4px solid var(--secondary)">
+      <div style="font-size:14px;font-weight:700;color:var(--primary)" id="qp-title"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;text-align:center">
+        <div style="background:white;border-radius:8px;padding:8px 4px">
+          <div style="font-size:10px;color:#888">মোট পাওনা</div>
+          <div style="font-weight:800;color:var(--secondary)" id="qp-total"></div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:8px 4px">
+          <div style="font-size:10px;color:#888">আগে আদায়</div>
+          <div style="font-weight:800;color:var(--accent)" id="qp-prev-received"></div>
+        </div>
+        <div style="background:#FFE0E0;border-radius:8px;padding:8px 4px">
+          <div style="font-size:10px;color:#888">এখনো বাকি</div>
+          <div style="font-weight:800;color:#CC0000" id="qp-due"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- নতুন আদায় -->
+    <div class="form-group">
+      <label>এবার কত টাকা পেলেন? (৳)</label>
+      <input type="number" id="qp-new-payment" placeholder="0" oninput="calcQpResult()" style="font-size:20px;font-weight:800;text-align:center">
+    </div>
+
+    <!-- ফলাফল preview -->
+    <div id="qp-result" style="display:none;background:#e8f4e8;border-radius:10px;padding:12px 14px;margin-bottom:4px;border-left:4px solid var(--accent)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+        <div>
+          <div style="font-size:11px;color:#555">মোট আদায় হবে</div>
+          <div style="font-size:18px;font-weight:800;color:var(--accent)" id="qp-new-total-received"></div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555">নতুন বকেয়া</div>
+          <div style="font-size:18px;font-weight:800;color:#CC0000" id="qp-new-due"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px">
+      <label>মন্তব্য (ঐচ্ছিক)</label>
+      <input type="text" id="qp-remark" placeholder="যেমন: আংশিক পরিশোধ">
+    </div>
+
+    <input type="hidden" id="qp-record-id">
+    <div id="qp-alert"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal('quick-pay-modal')">বাতিল</button>
+      <button class="btn btn-success" onclick="saveQuickPay()">✅ আপডেট করুন</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== BOTTOM NAV ===== -->
 <div class="bottom-nav">
   <button class="nav-item active" onclick="showPage('dashboard',this)"><span>📊</span>ড্যাশবোর্ড</button>
@@ -2548,11 +2606,14 @@ function renderDashboard() {
     const boke = r ? r.due : shop.rent;
     const elec = r ? (r.electric||0) : 0;
     tDue+=pawnaa; tRec+=aday; tClose+=boke; tElec+=elec;
+    const dueCell = boke > 0
+      ? `<span class="due-badge" onclick="openQuickPay('${shop.no}','${year}','${month}')" style="cursor:pointer" title="ক্লিক করে আদায় আপডেট করুন">৳${boke} 💳</span>`
+      : `<span class="paid-badge">✓</span>`;
     tbody += `<tr><td>${shop.no}</td><td style="text-align:left;font-size:12px">${shop.name}</td>
       <td>৳${pawnaa}</td>
       <td>${elec>0?`<span style="color:#E65100;font-weight:700">৳${elec}</span>`:`<span style="color:#aaa">—</span>`}</td>
       <td>৳${aday}</td>
-      <td>${boke>0?`<span class="due-badge">৳${boke}</span>`:`<span class="paid-badge">✓</span>`}</td></tr>`;
+      <td>${dueCell}</td></tr>`;
   });
   tbody += `<tr class="total-row"><td colspan="2">সর্বমোট</td><td>৳${tDue}</td><td>৳${tElec}</td><td>৳${tRec}</td><td>৳${tClose}</td></tr>`;
   document.getElementById('dash-tbody').innerHTML = tbody;
@@ -2562,6 +2623,58 @@ function renderDashboard() {
     <div class="kpi-box red"><div class="kpi-label">মোট বকেয়া</div><div class="kpi-value">৳${tClose}</div></div>
     <div class="kpi-box orange"><div class="kpi-label">বিদ্যুৎ বিল</div><div class="kpi-value">৳${tElec}</div></div>
     <div class="kpi-box purple" style="grid-column:span 2"><div class="kpi-label">মাসের খরচ</div><div class="kpi-value">৳${totalExp}</div></div>`;
+}
+
+// ===================== QUICK PAYMENT =====================
+function openQuickPay(shopNo, year, month) {
+  const data = loadData();
+  const r = data.find(d => d.shopNo === shopNo && d.year == year && d.month === month);
+  if (!r) {
+    showToast({ title: 'এই মাসের রেকর্ড নেই', msg: 'আগে এন্ট্রি পেজ থেকে রেকর্ড যোগ করুন', type: 'info' });
+    return;
+  }
+  // সারসংক্ষেপ দেখাও
+  document.getElementById('qp-title').textContent = `${shopNo} — ${r.owner} | ${month} ${year}`;
+  document.getElementById('qp-total').textContent = '৳' + r.total;
+  document.getElementById('qp-prev-received').textContent = '৳' + r.received;
+  document.getElementById('qp-due').textContent = '৳' + r.due;
+  document.getElementById('qp-record-id').value = r.id;
+  document.getElementById('qp-new-payment').value = '';
+  document.getElementById('qp-remark').value = '';
+  document.getElementById('qp-result').style.display = 'none';
+  document.getElementById('qp-alert').innerHTML = '';
+  showModal('quick-pay-modal');
+  setTimeout(() => document.getElementById('qp-new-payment').focus(), 350);
+}
+
+function calcQpResult() {
+  const newPay = parseFloat(document.getElementById('qp-new-payment').value) || 0;
+  const prevReceived = parseFloat(document.getElementById('qp-prev-received').textContent.replace('৳','')) || 0;
+  const total = parseFloat(document.getElementById('qp-total').textContent.replace('৳','')) || 0;
+  if (newPay <= 0) { document.getElementById('qp-result').style.display = 'none'; return; }
+  const newTotalReceived = prevReceived + newPay;
+  const newDue = Math.max(0, total - newTotalReceived);
+  document.getElementById('qp-new-total-received').textContent = '৳' + newTotalReceived;
+  document.getElementById('qp-new-due').textContent = '৳' + newDue;
+  document.getElementById('qp-result').style.display = 'block';
+}
+
+function saveQuickPay() {
+  const newPay = parseFloat(document.getElementById('qp-new-payment').value) || 0;
+  if (newPay <= 0) { showAlert('qp-alert', '⚠️ টাকার পরিমাণ লিখুন', 'info'); return; }
+  const recId = parseInt(document.getElementById('qp-record-id').value);
+  const data = loadData();
+  const idx = data.findIndex(r => r.id === recId);
+  if (idx < 0) { showAlert('qp-alert', '❌ রেকর্ড খুঁজে পাওয়া যায়নি', 'danger'); return; }
+  const rec = data[idx];
+  const newReceived = rec.received + newPay;
+  const newDue = Math.max(0, rec.total - newReceived);
+  const remark = document.getElementById('qp-remark').value.trim();
+  data[idx] = { ...rec, received: newReceived, due: newDue, remark: remark || rec.remark };
+  saveData(data);
+  hideModal('quick-pay-modal');
+  showToast({ title: 'আদায় আপডেট হয়েছে! 💰', msg: `${rec.shopNo} — নতুন আদায়: ৳${newPay} | বাকি: ৳${newDue}`, type: 'success' });
+  renderDashboard();
 }
 
 // ===================== RECORDS =====================
