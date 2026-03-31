@@ -13,6 +13,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <!-- SheetJS for Excel import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style id="theme-style">
 /* ডিফল্ট নেভি থিম */
 :root {
@@ -534,6 +536,9 @@ tr:nth-child(even) td { background: #f4f8ff; }
       <option>Jan</option><option>Feb</option><option>Mar</option><option>Apr</option><option>May</option><option>Jun</option>
       <option>Jul</option><option>Aug</option><option>Sep</option><option>Oct</option><option>Nov</option><option>Dec</option>
     </select>
+    <select id="rec-shop" onchange="renderRecords()">
+      <option value="">সব দোকান</option>
+    </select>
   </div>
   <div class="card">
     <div class="table-wrap">
@@ -552,6 +557,8 @@ tr:nth-child(even) td { background: #f4f8ff; }
     <button class="tab-btn" onclick="switchReportTab('shopwise',this)">🏪 দোকানওয়ারী</button>
     <button class="tab-btn" onclick="switchReportTab('yearly',this)">📆 বার্ষিক</button>
     <button class="tab-btn" onclick="switchReportTab('partner',this)">🤝 পার্টনার</button>
+    <button class="tab-btn" onclick="switchReportTab('dues',this)">⚠️ বকেয়া</button>
+    <button class="tab-btn" onclick="switchReportTab('chart',this)">📊 চার্ট</button>
   </div>
 
   <!-- Monthly -->
@@ -643,13 +650,47 @@ tr:nth-child(even) td { background: #f4f8ff; }
       </div>
     </div>
   </div>
+
+  <!-- ৭ — বকেয়াদার তালিকা -->
+  <div id="tab-dues" style="display:none">
+    <div class="card">
+      <div class="card-title">⚠️ সব বকেয়াদার
+        <select id="dues-year" onchange="renderDues()" style="font-size:12px;padding:4px 8px;width:auto;border:1px solid #BDD7EE;border-radius:6px">
+          <option>2024</option><option>2025</option><option selected>2026</option><option>2027</option>
+        </select>
+      </div>
+      <div id="dues-kpi" class="kpi-grid" style="margin-bottom:12px"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>দোকান</th><th>মালিক</th><th>বকেয়া মাস</th><th>মোট বকেয়া</th><th>একশন</th></tr></thead>
+          <tbody id="dues-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ১১ — চার্ট -->
+  <div id="tab-chart" style="display:none">
+    <div class="card">
+      <div class="card-title">📊 মাসিক আয়-বকেয়া চার্ট
+        <select id="chart-year" onchange="renderChart()" style="font-size:12px;padding:4px 8px;width:auto;border:1px solid #BDD7EE;border-radius:6px">
+          <option>2024</option><option>2025</option><option selected>2026</option><option>2027</option>
+        </select>
+      </div>
+      <canvas id="rent-chart" style="width:100%;max-height:280px"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 দোকানওয়ারী বকেয়া চার্ট</div>
+      <canvas id="shop-chart" style="width:100%;max-height:260px"></canvas>
+    </div>
+  </div>
 </div>
 
 <!-- ===== EXPENSES ===== -->
 <div class="page" id="page-expenses">
   <div class="section-title">
     <span>💸 মেইনটেনেন্স খরচ</span>
-    <button class="btn btn-success btn-sm" onclick="showModal('add-expense-modal')">+ নতুন খরচ</button>
+    <button class="btn btn-success btn-sm" onclick="openAddExpense()">+ নতুন খরচ</button>
   </div>
 
   <div class="filter-bar">
@@ -807,11 +848,11 @@ tr:nth-child(even) td { background: #f4f8ff; }
     
     <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:6px">🎨 থিম সিলেক্ট করুন:</p>
     <div style="display:flex;gap:8px;justify-content:center;margin-bottom:15px">
-      <div class="theme-badge" style="background:#1F3864" onclick="setTheme('navy')" title="নেভি ব্লু"></div>
-      <div class="theme-badge" style="background:#2E7D32" onclick="setTheme('green')" title="গ্রিন"></div>
-      <div class="theme-badge" style="background:#6A1B9A" onclick="setTheme('purple')" title="পার্পল"></div>
-      <div class="theme-badge" style="background:#E65100" onclick="setTheme('orange')" title="অরেঞ্জ"></div>
-      <div class="theme-badge" style="background:#263238" onclick="setTheme('dark')" title="ডার্ক"></div>
+      <div class="theme-badge" data-theme="navy"   style="background:#1F3864" onclick="setTheme('navy')"   title="নেভি ব্লু"></div>
+      <div class="theme-badge" data-theme="green"  style="background:#2E7D32" onclick="setTheme('green')"  title="গ্রিন"></div>
+      <div class="theme-badge" data-theme="purple" style="background:#6A1B9A" onclick="setTheme('purple')" title="পার্পল"></div>
+      <div class="theme-badge" data-theme="orange" style="background:#E65100" onclick="setTheme('orange')" title="অরেঞ্জ"></div>
+      <div class="theme-badge" data-theme="dark"   style="background:#263238" onclick="setTheme('dark')"   title="🌙 ডার্ক মোড"></div>
     </div>
 
     <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:8px">🔡 অক্ষরের সাইজ:</p>
@@ -824,6 +865,15 @@ tr:nth-child(even) td { background: #f4f8ff; }
       <button onclick="changeFontSize(+1)" style="width:40px;height:40px;border-radius:10px;border:none;background:var(--secondary);color:white;font-size:20px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
       <button onclick="resetFontSize()" style="padding:8px 12px;border-radius:10px;border:none;background:#ddd;color:#555;font-size:12px;font-weight:bold;cursor:pointer">রিসেট</button>
     </div>
+
+    <!-- ১২ — Custom Expense Category -->
+    <div class="divider"></div>
+    <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:6px">📂 খরচের ক্যাটাগরি (Custom)</p>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" id="new-cat-input" placeholder="নতুন ক্যাটাগরি নাম" style="flex:1;padding:10px 12px;border:1.5px solid var(--border-light);border-radius:8px;font-size:14px">
+      <button onclick="saveCustomCategory()" class="btn btn-primary btn-sm" style="white-space:nowrap">+ যোগ</button>
+    </div>
+    <div id="custom-cat-list" style="margin-bottom:8px"></div>
 
     <p style="font-size:13px;font-weight:bold;color:#1F3864;margin-bottom:6px">🏢 মার্কেটের যোগাযোগ তথ্য:</p>
     <div class="form-group">
@@ -1185,9 +1235,10 @@ tr:nth-child(even) td { background: #f4f8ff; }
       <input type="text" id="exp-e-note" placeholder="ঐচ্ছিক">
     </div>
     <div id="exp-alert"></div>
+    <input type="hidden" id="exp-edit-id" value="">
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="hideModal('add-expense-modal')">বাতিল</button>
-      <button class="btn btn-danger" onclick="saveExpense()">💾 সেভ করুন</button>
+      <button class="btn btn-danger" id="exp-save-btn" onclick="saveExpense()">💾 সেভ করুন</button>
     </div>
   </div>
 </div>
@@ -1422,6 +1473,7 @@ tr:nth-child(even) td { background: #f4f8ff; }
 const AUTH_KEY = 'mkt_auth_v1';
 const SESSION_KEY = 'mkt_session';
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // ৮ ঘণ্টা
+const FONT_MIN = 12, FONT_MAX = 20, FONT_DEFAULT = 15;
 
 // ===================== AUTH — Firebase-প্রথম সিস্টেম =====================
 // localStorage শুধু offline cache হিসেবে — সত্যিকারের source হলো Firebase
@@ -1682,7 +1734,21 @@ function doRegister() {
   if (password !== confirm) { showLoginError('reg-error', '❌ পাসওয়ার্ড দুটো মিলছে না'); return; }
   const existing = getAuth();
   if (existing) {
-    if (!confirm(`ইতিমধ্যে সেটআপ আছে!\nআইডি: ${existing.userId}\n\nরিসেট করবেন?`)) return;
+    customConfirm({
+      icon: '⚠️', title: 'আগের সেটআপ রিসেট হবে!',
+      msg: `বর্তমান অ্যাডমিন আইডি: <strong>${existing.userId}</strong><br><br>নতুন সেটআপ দিলে আগেরটি মুছে যাবে। নিশ্চিত?`,
+      okText: '✅ হ্যাঁ, রিসেট করুন', okClass: '',
+      cancelText: '↩️ বাতিল'
+    }).then(ok => {
+      if (!ok) return;
+      saveAuth({ userId, pwdHash: hashStr(password), fpEnabled: false });
+      showLoginSuccess('reg-success', '✅ সেটআপ সফল! এখন লগইন করুন।');
+      setTimeout(() => {
+        document.getElementById('login-userid').value = userId;
+        document.querySelectorAll('.login-tab')[0].click();
+      }, 1200);
+    });
+    return;
   }
   saveAuth({ userId, pwdHash: hashStr(password), fpEnabled: false });
   showLoginSuccess('reg-success', '✅ সেটআপ সফল! এখন লগইন করুন।');
@@ -1883,7 +1949,7 @@ function addGuestUser() {
   document.getElementById('new-guest-id').value = '';
   document.getElementById('new-guest-pwd').value = '';
   renderGuestList();
-  alert(`✅ গেস্ট আইডি "${userId}" তৈরি হয়েছে!\n\nতাদের জানান:\nআইডি: ${userId}\nপাসওয়ার্ড: (আপনি যা দিয়েছেন)\nলিংক: ${location.href}`);
+  showToast({ title: `✅ গেস্ট "${userId}" তৈরি হয়েছে!`, msg: `আইডি: ${userId} | লিংক শেয়ার করুন`, type: 'success', duration: 5000 });
 }
 
 function deleteGuestUser(userId) {
@@ -1932,26 +1998,34 @@ function showModal(id) {
   _origShowModal(id);
   if (id === 'info-modal') {
     renderGuestList();
-    // font size display আপডেট
     const sz = parseInt(localStorage.getItem('font_size') || FONT_DEFAULT);
     const el = document.getElementById('font-size-display');
     if (el) el.textContent = sz + 'px';
+    renderCustomCatList();
+    refreshCategoryDropdowns();
   }
 }
 
 
 function doLogout() {
-  if (!confirm('লগআউট করবেন?')) return;
-  clearSession();
-  hideModal('info-modal');
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('main-app').style.display = 'none';
-  document.body.classList.add('locked');
-  document.getElementById('login-userid').value = '';
-  document.getElementById('login-password').value = '';
-  document.getElementById('fp-ring').textContent = '🔒';
-  document.getElementById('fp-ring').className = 'fp-ring';
-  document.getElementById('fp-status-text').textContent = 'আপনার ID ও পাসওয়ার্ড দিন';
+  customConfirm({
+    icon: '🚪', title: 'লগআউট করবেন?',
+    msg: 'আপনি লগআউট করলে আবার লগইন করতে হবে।',
+    okText: '🚪 লগআউট', okClass: '',
+    cancelText: '↩️ বাতিল'
+  }).then(ok => {
+    if (!ok) return;
+    clearSession();
+    hideModal('info-modal');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('main-app').style.display = 'none';
+    document.body.classList.add('locked');
+    document.getElementById('login-userid').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('fp-ring').textContent = '🔒';
+    document.getElementById('fp-ring').className = 'fp-ring';
+    document.getElementById('fp-status-text').textContent = 'আপনার ID ও পাসওয়ার্ড দিন';
+  });
 }
 
 // ---- Change Auth (settings থেকে) ----
@@ -2009,7 +2083,55 @@ function bootAuth() {
 }
 
 // অ্যাপের মূল init (login-এর পরে)
+// ৬ — Session expire warning
+function startSessionWarning() {
+  const WARNING_BEFORE = 10 * 60 * 1000; // মেয়াদ শেষের ১০ মিনিট আগে
+  const CHECK_INTERVAL = 60 * 1000; // প্রতি ১ মিনিটে চেক
+
+  setInterval(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+      if (!s) return;
+      const remaining = SESSION_DURATION - (Date.now() - s.ts);
+      if (remaining > 0 && remaining <= WARNING_BEFORE) {
+        const mins = Math.ceil(remaining / 60000);
+        showToast({
+          title: `⏰ সেশন শেষ হতে ${mins} মিনিট বাকি`,
+          msg: 'কাজ সেভ করুন। সময় শেষে auto logout হবে।',
+          type: 'warning',
+          duration: 8000
+        });
+      } else if (remaining <= 0) {
+        showToast({ title: '🔒 সেশন মেয়াদ শেষ', msg: 'নিরাপত্তার জন্য লগআউট হচ্ছে...', type: 'error', duration: 3000 });
+        setTimeout(() => doLogout(), 3000);
+      }
+    } catch(e) {}
+  }, CHECK_INTERVAL);
+}
+
 function initApp() {
+  // ১,২,৩ — সব year/month select এ current date auto-set
+  const now = new Date();
+  const curYear  = now.getFullYear().toString();
+  const curMonth = MONTHS[now.getMonth()];
+
+  ['dash-year','e-year','rec-year','rpt-year','sw-year','exp-year','partner-year','bd-year','dues-year','chart-year'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      // option না থাকলে যোগ করো
+      if (![...el.options].find(o => o.value === curYear)) {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = curYear;
+        el.appendChild(opt);
+      }
+      el.value = curYear;
+    }
+  });
+  ['dash-month','e-month','exp-e-month'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = curMonth;
+  });
+
   initShopDropdown();
   const eDateEl = document.getElementById('e-date');
   if (eDateEl) eDateEl.value = today();
@@ -2019,11 +2141,11 @@ function initApp() {
   renderYearlyReport();
   updateMarketContactDisplay();
   renderNotes();
-  // saved theme
   const saved = localStorage.getItem('selected_theme');
   if (saved) setTheme(saved);
-  // saved font size
   loadFontSize();
+  refreshCategoryDropdowns();
+  startSessionWarning();
 }
 
 // ===================== TOAST NOTIFICATION =====================
@@ -2180,18 +2302,15 @@ function attachFirebaseListeners() {
     initShopDropdown && initShopDropdown();
   });
 
-  // খরচ
+  // খরচ — delete sync সহ
   fbDb.ref('expenses').on('value', snap => {
     const val = snap.val();
-    if (!val) return;
-    const exps = Array.isArray(val) ? val : Object.values(val);
+    // Firebase তে null মানে সব মুছে গেছে
+    const fbExps = val ? (Array.isArray(val) ? val : Object.values(val)).filter(Boolean) : [];
     const local = loadExpenses();
-    const localIds = new Set(local.map(e => e.id));
-    const merged = [...local];
-    let changed = false;
-    exps.forEach(e => { if (!localIds.has(e.id)) { merged.push(e); changed = true; } });
-    if (changed) {
-      localStorage.setItem('expenses', JSON.stringify(merged));
+    // Firebase কে master হিসেবে ধরো — local এ যা আছে কিন্তু Firebase এ নেই সেটা delete হয়েছে
+    if (JSON.stringify(local.map(e=>e.id).sort()) !== JSON.stringify(fbExps.map(e=>e.id).sort())) {
+      localStorage.setItem('expenses', JSON.stringify(fbExps));
       renderExpenses && renderExpenses();
     }
   });
@@ -2228,7 +2347,7 @@ function attachFirebaseListeners() {
 // ---- প্রথমবার সব local ডেটা Firebase-এ পুশ করা ----
 function pushAllToFirebase() {
   if (!fbSyncEnabled || !fbDb) {
-    alert('Firebase সংযুক্ত নেই!'); return;
+    showToast({ title: 'Firebase সংযুক্ত নেই!', type: 'error' }); return;
   }
   fbDb.ref('records').set(loadData());
   fbDb.ref('shops').set(getShops());
@@ -2237,11 +2356,10 @@ function pushAllToFirebase() {
   fbDb.ref('loans').set(getLoans());
   fbDb.ref('marketInfo').set(getMarketInfo());
   fbDb.ref('partner').set(getPartner());
-  // Auth ও Firebase-এ রাখো — অন্য browser sync এর জন্য
   const auth = getAuth();
   if (auth) fbDb.ref('auth').set(auth);
   updateSyncStatusUI('synced');
-  alert('✅ সব ডেটা Firebase-এ আপলোড হয়েছে!\n\nএখন অন্য browser/device-এ খুললে পাসওয়ার্ড সেটআপ লাগবে না।');
+  showToast({ title: '✅ Firebase আপলোড সম্পন্ন!', msg: 'অন্য device এ এখন sync হবে', type: 'success', duration: 4000 });
 }
 
 // ---- Sync Status UI ----
@@ -2353,7 +2471,6 @@ function savePartnerData(d) {
 function getPartner() {
   return JSON.parse(localStorage.getItem('partner_settings') || JSON.stringify({p1:{name:"পার্টনার ১",share:50}, p2:{name:"পার্টনার ২",share:50}}));
 }
-function savePartnerData(d) { localStorage.setItem('partner_settings', JSON.stringify(d)); }
 
 // মার্কেট ইনফো
 function getMarketInfo() {
@@ -2399,7 +2516,7 @@ function saveMarketInfo() {
 function setTheme(themeName) {
   const theme = THEMES[themeName];
   if (!theme) return;
-  
+
   const root = document.documentElement;
   root.style.setProperty('--primary', theme.primary);
   root.style.setProperty('--secondary', theme.secondary);
@@ -2408,14 +2525,47 @@ function setTheme(themeName) {
   root.style.setProperty('--warning', theme.warning);
   root.style.setProperty('--purple', theme.purple);
   root.style.setProperty('--border-light', theme.border);
-  
+
+  // ১৭ — সত্যিকারের Dark Mode
+  if (themeName === 'dark') {
+    document.body.style.background = '#1a1a2e';
+    document.body.style.color = '#e0e0e0';
+    root.style.setProperty('--light-bg', '#1a1a2e');
+    // card, modal dark করো
+    let darkStyle = document.getElementById('dark-mode-style');
+    if (!darkStyle) {
+      darkStyle = document.createElement('style');
+      darkStyle.id = 'dark-mode-style';
+      document.head.appendChild(darkStyle);
+    }
+    darkStyle.textContent = `
+      .card, .modal, .shop-card, .kpi-box { background: #16213e !important; color: #e0e0e0 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important; }
+      .form-group select, .form-group input, .form-group textarea { background: #0f3460 !important; color: #e0e0e0 !important; border-color: #37474F !important; }
+      .form-group .auto-field { background: #1a3a1a !important; color: #90EE90 !important; }
+      .filter-bar select, .filter-bar input { background: #16213e !important; color: #e0e0e0 !important; border-color: #37474F !important; }
+      td { color: #e0e0e0 !important; }
+      tr:nth-child(even) td { background: #0f3460 !important; }
+      .card-title, .section-title, .kpi-label { color: #90CAF9 !important; }
+      .tab-bar { background: #0f3460 !important; }
+      .tab-btn { color: #90CAF9 !important; }
+      .info-box { background: #0f3460 !important; color: #e0e0e0 !important; }
+      .auth-setting-box { background: #0f3460 !important; }
+    `;
+  } else {
+    // dark mode সরাও
+    document.body.style.background = '';
+    document.body.style.color = '';
+    root.style.setProperty('--light-bg', '#f0f4f8');
+    const darkStyle = document.getElementById('dark-mode-style');
+    if (darkStyle) darkStyle.textContent = '';
+  }
+
   document.getElementById('meta-theme-color').setAttribute('content', theme.primary);
   localStorage.setItem('selected_theme', themeName);
-  
-  // অ্যাক্টিভ থিম হাইলাইট
+
   document.querySelectorAll('.theme-badge').forEach(b => b.classList.remove('active'));
   const activeTheme = Array.from(document.querySelectorAll('.theme-badge')).find(
-    el => el.style.backgroundColor === theme.primary
+    el => el.getAttribute('data-theme') === themeName
   );
   if (activeTheme) activeTheme.classList.add('active');
 }
@@ -2426,7 +2576,6 @@ function loadTheme() {
 }
 
 // ===================== অক্ষর সাইজ =====================
-const FONT_MIN = 12, FONT_MAX = 20, FONT_DEFAULT = 15;
 
 function applyFontSize(size) {
   document.body.style.fontSize = size + 'px';
@@ -2458,17 +2607,27 @@ function showPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   btn.classList.add('active');
   if(name==='dashboard') renderDashboard();
-  if(name==='records')   renderRecords();
-  if(name==='reports')   { renderMonthlyReport(); renderShopWise(); renderYearlyReport(); renderPartner(); }
+  if(name==='records')   {
+    // ১৫ — rec-shop dropdown populate
+    const shopSel = document.getElementById('rec-shop');
+    if (shopSel && shopSel.options.length <= 1) {
+      getShops().forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.no; o.textContent = s.no + ' — ' + s.name;
+        shopSel.appendChild(o);
+      });
+    }
+    renderRecords();
+  }
+  if(name==='reports')   renderMonthlyReport();
   if(name==='expenses')  renderExpenses();
   if(name==='shops')     renderShops();
   if(name==='entry')     initShopDropdown();
 }
-function showModal(id) { document.getElementById(id).classList.add('show'); }
 function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 
 function switchReportTab(tab, btn) {
-  ['monthly','shopwise','yearly','partner'].forEach(t => {
+  ['monthly','shopwise','yearly','partner','dues','chart'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===tab ? 'block' : 'none';
   });
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -2477,6 +2636,8 @@ function switchReportTab(tab, btn) {
   if(tab==='shopwise') renderShopWise();
   if(tab==='yearly') renderYearlyReport();
   if(tab==='partner') renderPartner();
+  if(tab==='dues') renderDues();
+  if(tab==='chart') renderChart();
 }
 
 // ===================== SHOP DROPDOWN =====================
@@ -2578,7 +2739,12 @@ function saveEntry() {
   saveData(data);
   showAlert('entry-alert','✅ সফলভাবে সেভ হয়েছে!','success');
   showToast({ title: 'ভাড়া সেভ হয়েছে! 🎉', msg: `${rec.shopNo} — ${rec.month} ${rec.year} | আদায়: ৳${rec.received}`, type: 'success' });
-  ['e-electric','e-prev-due','e-received'].forEach(id => document.getElementById(id).value=0);
+  // ১৩ — পুরো ফর্ম reset
+  document.getElementById('e-shop').value = '';
+  document.getElementById('e-owner').value = '';
+  document.getElementById('e-fixed').value = '';
+  ['e-electric','e-prev-due','e-received','e-remark'].forEach(id => document.getElementById(id).value = id === 'e-remark' ? '' : 0);
+  document.getElementById('e-date').value = today();
   calcTotal();
 }
 
@@ -2622,7 +2788,9 @@ function renderDashboard() {
     <div class="kpi-box green"><div class="kpi-label">মোট আদায়</div><div class="kpi-value">৳${tRec}</div></div>
     <div class="kpi-box red"><div class="kpi-label">মোট বকেয়া</div><div class="kpi-value">৳${tClose}</div></div>
     <div class="kpi-box orange"><div class="kpi-label">বিদ্যুৎ বিল</div><div class="kpi-value">৳${tElec}</div></div>
-    <div class="kpi-box purple" style="grid-column:span 2"><div class="kpi-label">মাসের খরচ</div><div class="kpi-value">৳${totalExp}</div></div>`;
+    <div class="kpi-box purple"><div class="kpi-label">এন্ট্রি হয়েছে</div><div class="kpi-value">${data.length}/${shops.length}টি</div></div>
+    <div class="kpi-box ${shops.length - data.length > 0 ? 'red' : 'green'}"><div class="kpi-label">এন্ট্রি বাকি</div><div class="kpi-value">${shops.length - data.length}টি</div></div>
+    <div class="kpi-box orange" style="grid-column:span 2"><div class="kpi-label">মাসের খরচ</div><div class="kpi-value">৳${totalExp}</div></div>`;
 }
 
 // ===================== QUICK PAYMENT =====================
@@ -2679,10 +2847,24 @@ function saveQuickPay() {
 
 // ===================== RECORDS =====================
 function renderRecords() {
-  const year = document.getElementById('rec-year').value;
+  const year  = document.getElementById('rec-year').value;
   const month = document.getElementById('rec-month').value;
-  let data = loadData().filter(r=>r.year==year);
-  if(month) data = data.filter(r=>r.month==month);
+  const shop  = document.getElementById('rec-shop') ? document.getElementById('rec-shop').value : '';
+
+  // ১৫ — shop filter dropdown populate
+  const shopSel = document.getElementById('rec-shop');
+  if (shopSel && shopSel.options.length <= 1) {
+    getShops().forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.no; o.textContent = s.no + ' — ' + s.name;
+      shopSel.appendChild(o);
+    });
+  }
+
+  let data = loadData().filter(r => r.year == year);
+  if (month) data = data.filter(r => r.month === month);
+  if (shop)  data = data.filter(r => r.shopNo === shop);
+
   const adminBtns = isAdmin() ? `<th>অ্যাকশন</th>` : '';
   document.querySelector('#rec-tbody').closest('table').querySelector('thead tr').innerHTML =
     `<th>মাস</th><th>দোকান</th><th>মালিক</th><th>পাওনা</th><th>আদায়</th><th>বকেয়া</th>${adminBtns}`;
@@ -2690,6 +2872,7 @@ function renderRecords() {
   data.forEach(r => {
     const actionBtns = isAdmin() ? `<td style="white-space:nowrap">
       <button class="btn btn-primary btn-sm" onclick="editRecord(${r.id})" style="margin-right:4px">✏️</button>
+      <button class="btn btn-success btn-sm" onclick="printReceipt(${r.id})" style="margin-right:4px" title="রসিদ">🧾</button>
       <button class="btn btn-danger btn-sm" onclick="deleteRecord(${r.id})">🗑️</button>
     </td>` : '';
     tbody += `<tr>
@@ -2941,6 +3124,196 @@ function renderPartner() {
     </div>`;
 }
 
+// ===================== ৭ — বকেয়াদার তালিকা =====================
+function renderDues() {
+  const year = document.getElementById('dues-year').value;
+  const data = loadData().filter(r => r.year == year && r.due > 0);
+  const shops = getShops();
+
+  // দোকান অনুযায়ী group করো
+  const byShop = {};
+  data.forEach(r => {
+    if (!byShop[r.shopNo]) byShop[r.shopNo] = { shopNo: r.shopNo, owner: r.owner, months: [], totalDue: 0 };
+    byShop[r.shopNo].months.push(r.month);
+    byShop[r.shopNo].totalDue += r.due;
+  });
+
+  const duesList = Object.values(byShop).sort((a,b) => b.totalDue - a.totalDue);
+  const totalDue = duesList.reduce((s,d) => s + d.totalDue, 0);
+  const totalShops = duesList.length;
+
+  document.getElementById('dues-kpi').innerHTML = `
+    <div class="kpi-box red"><div class="kpi-label">মোট বকেয়া</div><div class="kpi-value">৳${totalDue.toLocaleString()}</div></div>
+    <div class="kpi-box orange"><div class="kpi-label">বকেয়াদার দোকান</div><div class="kpi-value">${totalShops}টি</div></div>`;
+
+  if (!duesList.length) {
+    document.getElementById('dues-tbody').innerHTML = `<tr><td colspan="5" style="color:#4CAF50;padding:20px;text-align:center">🎉 ${year} সালে কোনো বকেয়া নেই!</td></tr>`;
+    return;
+  }
+  document.getElementById('dues-tbody').innerHTML = duesList.map(d => {
+    const shop = shops.find(s => s.no === d.shopNo) || {};
+    const mobile = shop.mobile || '';
+    const waBtn = mobile
+      ? `<button class="btn btn-success btn-sm" onclick="sendWhatsApp('${mobile}','${d.shopNo}','${d.owner}',${d.totalDue})" style="background:#25D366">💬 WhatsApp</button>`
+      : '';
+    return `<tr>
+      <td><strong>${d.shopNo}</strong></td>
+      <td style="text-align:left">${d.owner}</td>
+      <td style="font-size:11px">${d.months.join(', ')}<br><span style="color:#888">${d.months.length} মাস</span></td>
+      <td><span class="due-badge">৳${d.totalDue.toLocaleString()}</span></td>
+      <td>${waBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===================== ১০ — WhatsApp বকেয়া reminder =====================
+function sendWhatsApp(mobile, shopNo, owner, due) {
+  const marketInfo = getMarketInfo();
+  const msg = `আসসালামু আলাইকুম ${owner} ভাই,\n\n${marketInfo.address || 'মার্কেট'} থেকে জানানো হচ্ছে যে, *${shopNo}* নম্বর দোকানের বর্তমান বকেয়া ভাড়া *৳${due.toLocaleString()}* টাকা।\n\nঅনুগ্রহ করে দ্রুত পরিশোধ করুন।\n\nধন্যবাদ।\n— ${marketInfo.contactPerson || 'মার্কেট কর্তৃপক্ষ'}`;
+  const phone = mobile.replace(/[^0-9]/g, '');
+  const intlPhone = phone.startsWith('0') ? '88' + phone : phone;
+  window.open(`https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// ===================== ৮ — ভাড়া রসিদ =====================
+function printReceipt(recordId) {
+  const rec = loadData().find(r => r.id == recordId);
+  if (!rec) return;
+  const marketInfo = getMarketInfo();
+  const receiptHTML = `
+    <html><head><meta charset="UTF-8">
+    <style>
+      body{font-family:Arial,sans-serif;padding:20px;max-width:400px;margin:0 auto}
+      .header{text-align:center;border-bottom:2px solid #1F3864;padding-bottom:10px;margin-bottom:14px}
+      .title{font-size:18px;font-weight:bold;color:#1F3864}
+      .subtitle{font-size:12px;color:#666;margin-top:4px}
+      .receipt-no{font-size:11px;color:#888;margin-top:4px}
+      .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
+      .label{color:#555}.value{font-weight:bold}
+      .total-row{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:bold;color:#1F3864;border-top:2px solid #1F3864;margin-top:8px}
+      .due{color:#CC0000}.paid{color:#006600}
+      .footer{text-align:center;font-size:11px;color:#888;margin-top:16px;padding-top:10px;border-top:1px dashed #ccc}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <div class="header">
+      <div class="title">🏪 ${marketInfo.contactPerson || 'মার্কেট'}</div>
+      <div class="subtitle">${marketInfo.address || ''}</div>
+      <div class="receipt-no">রসিদ নং: REC-${rec.id.toString().slice(-6)} | তারিখ: ${rec.date || today()}</div>
+    </div>
+    <div class="row"><span class="label">দোকান নং</span><span class="value">${rec.shopNo}</span></div>
+    <div class="row"><span class="label">ভাড়াটে</span><span class="value">${rec.owner}</span></div>
+    <div class="row"><span class="label">মাস</span><span class="value">${rec.month} ${rec.year}</span></div>
+    <div class="row"><span class="label">ফিক্সড ভাড়া</span><span class="value">৳${rec.fixed}</span></div>
+    ${rec.electric > 0 ? `<div class="row"><span class="label">বিদ্যুৎ বিল</span><span class="value">৳${rec.electric}</span></div>` : ''}
+    ${rec.prevDue > 0 ? `<div class="row"><span class="label">পূর্বের বকেয়া</span><span class="value due">৳${rec.prevDue}</span></div>` : ''}
+    <div class="row"><span class="label">মোট পাওনা</span><span class="value">৳${rec.total}</span></div>
+    <div class="total-row"><span>আদায়কৃত</span><span class="paid">৳${rec.received}</span></div>
+    ${rec.due > 0 ? `<div class="total-row" style="font-size:14px"><span>অবশিষ্ট বকেয়া</span><span class="due">৳${rec.due}</span></div>` : '<div style="text-align:center;color:#006600;font-weight:bold;margin-top:8px">✅ সম্পূর্ণ পরিশোধ</div>'}
+    ${rec.remark ? `<div style="font-size:12px;color:#888;margin-top:8px">মন্তব্য: ${rec.remark}</div>` : ''}
+    <div class="footer">📞 ${marketInfo.contactMobile || ''}<br>ধন্যবাদ আপনার পেমেন্টের জন্য</div>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=440,height=600');
+  w.document.write(receiptHTML);
+  w.document.close();
+  w.print();
+}
+
+// ===================== ১১ — চার্ট =====================
+let rentChartInst = null, shopChartInst = null;
+
+function renderChart() {
+  const year = document.getElementById('chart-year').value;
+  const data = loadData().filter(r => r.year == year);
+  const exps = loadExpenses().filter(e => e.year == year);
+
+  // মাসওয়ারী bar chart
+  const monthlyRec  = MONTHS.map(m => data.filter(r=>r.month===m).reduce((s,r)=>s+r.received,0));
+  const monthlyDue  = MONTHS.map(m => data.filter(r=>r.month===m).reduce((s,r)=>s+r.due,0));
+  const monthlyExp  = MONTHS.map(m => exps.filter(e=>e.month===m).reduce((s,e)=>s+e.amount,0));
+
+  const ctx1 = document.getElementById('rent-chart').getContext('2d');
+  if (rentChartInst) rentChartInst.destroy();
+  rentChartInst = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: MONTHS,
+      datasets: [
+        { label: 'আদায়', data: monthlyRec, backgroundColor: 'rgba(112,173,71,0.8)', borderRadius: 4 },
+        { label: 'বকেয়া', data: monthlyDue, backgroundColor: 'rgba(255,68,68,0.7)', borderRadius: 4 },
+        { label: 'খরচ',  data: monthlyExp, backgroundColor: 'rgba(237,125,49,0.7)', borderRadius: 4 }
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // দোকানওয়ারী দণ্ড চার্ট
+  const shops = getShops().filter(s=>s.status==='active');
+  const shopDues = shops.map(s => data.filter(r=>r.shopNo===s.no).reduce((sum,r)=>sum+r.due,0));
+  const ctx2 = document.getElementById('shop-chart').getContext('2d');
+  if (shopChartInst) shopChartInst.destroy();
+  shopChartInst = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: shops.map(s => s.no),
+      datasets: [{ label: 'বকেয়া (৳)', data: shopDues, backgroundColor: shopDues.map(d => d > 0 ? 'rgba(255,68,68,0.75)' : 'rgba(112,173,71,0.7)'), borderRadius: 4 }]
+    },
+    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+  });
+}
+
+// ===================== ১২ — Custom expense category =====================
+function getExpCategories() {
+  const defaults = ['বিদ্যুৎ কাজ','নির্মাণ কাজ','সাটার মেরামত','ট্যাক্স/ভ্যাট','পরিষ্কার','অন্যান্য'];
+  const custom = JSON.parse(localStorage.getItem('custom_exp_cats') || '[]');
+  return [...defaults, ...custom.filter(c => !defaults.includes(c))];
+}
+
+function saveCustomCategory() {
+  const val = document.getElementById('new-cat-input').value.trim();
+  if (!val) return;
+  const custom = JSON.parse(localStorage.getItem('custom_exp_cats') || '[]');
+  if (custom.includes(val) || getExpCategories().includes(val)) {
+    showToast({ title: 'এই ক্যাটাগরি আগেই আছে', type: 'info' }); return;
+  }
+  custom.push(val);
+  localStorage.setItem('custom_exp_cats', JSON.stringify(custom));
+  document.getElementById('new-cat-input').value = '';
+  refreshCategoryDropdowns();
+  showToast({ title: `"${val}" ক্যাটাগরি যোগ হয়েছে ✅`, type: 'success' });
+  renderCustomCatList();
+}
+
+function refreshCategoryDropdowns() {
+  const cats = getExpCategories();
+  ['exp-e-cat','exp-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = (id === 'exp-cat' ? '<option value="">সব ধরন</option>' : '') + cats.map(c => `<option>${c}</option>`).join('');
+    if (cur) el.value = cur;
+  });
+}
+
+function renderCustomCatList() {
+  const custom = JSON.parse(localStorage.getItem('custom_exp_cats') || '[]');
+  const el = document.getElementById('custom-cat-list');
+  if (!el) return;
+  el.innerHTML = custom.length === 0
+    ? '<div style="font-size:12px;color:#999">কোনো custom ক্যাটাগরি নেই</div>'
+    : custom.map((c,i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #eee">
+        <span style="font-size:13px">${c}</span>
+        <button onclick="deleteCustomCat(${i})" style="background:#FF4444;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer">✕</button>
+      </div>`).join('');
+}
+
+function deleteCustomCat(idx) {
+  const custom = JSON.parse(localStorage.getItem('custom_exp_cats') || '[]');
+  custom.splice(idx, 1);
+  localStorage.setItem('custom_exp_cats', JSON.stringify(custom));
+  refreshCategoryDropdowns();
+  renderCustomCatList();
+}
+
 function savePartnerSettings() {
   const p1share = parseInt(document.getElementById('p1-share').value)||50;
   const p2share = 100 - p1share;
@@ -2960,48 +3333,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const v = parseInt(p1Input.value)||0;
     document.getElementById('p2-share').value = 100-v;
   });
-  // Load partner settings into modal
   const p = getPartner();
   document.getElementById('p1-name').value = p.p1.name;
   document.getElementById('p1-share').value = p.p1.share;
   document.getElementById('p2-name').value = p.p2.name;
   document.getElementById('p2-share').value = p.p2.share;
-  
-  // Load theme
   loadTheme();
-  
-  // Load market info
   updateMarketContactDisplay();
-  
-  // Populate market info in modal
   const marketInfo = getMarketInfo();
   document.getElementById('market-address').value = marketInfo.address;
   document.getElementById('market-contact-person').value = marketInfo.contactPerson;
   document.getElementById('market-contact-mobile').value = marketInfo.contactMobile;
+  // custom expense categories load
+  refreshCategoryDropdowns();
 });
 
 // ===================== EXPENSES =====================
 function saveExpense() {
   const amount = parseFloat(document.getElementById('exp-e-amount').value)||0;
   if(!amount) { showAlert('exp-alert','⚠️ টাকার পরিমাণ দিন','info'); return; }
-  const exp = {
-    id: Date.now(),
-    year:   document.getElementById('exp-e-year').value,
-    month:  document.getElementById('exp-e-month').value,
-    cat:    document.getElementById('exp-e-cat').value,
-    desc:   document.getElementById('exp-e-desc').value,
-    amount,
-    date:   document.getElementById('exp-e-date').value,
-    note:   document.getElementById('exp-e-note').value,
-  };
+  const editId = document.getElementById('exp-edit-id').value;
   const exps = loadExpenses();
-  exps.push(exp);
-  saveExpenses(exps);
-  hideModal('add-expense-modal');
-  showToast({ title: 'খরচ সেভ হয়েছে! 💸', msg: `${exp.cat} — ৳${exp.amount} | ${exp.month} ${exp.year}`, type: 'success' });
-  document.getElementById('exp-e-desc').value='';
-  document.getElementById('exp-e-amount').value='';
-  document.getElementById('exp-e-note').value='';
+
+  if (editId) {
+    // ===== EDIT MODE =====
+    const idx = exps.findIndex(e => e.id == editId);
+    if (idx === -1) return;
+    exps[idx] = { ...exps[idx],
+      year:   document.getElementById('exp-e-year').value,
+      month:  document.getElementById('exp-e-month').value,
+      cat:    document.getElementById('exp-e-cat').value,
+      desc:   document.getElementById('exp-e-desc').value,
+      amount,
+      date:   document.getElementById('exp-e-date').value,
+      note:   document.getElementById('exp-e-note').value,
+    };
+    saveExpenses(exps);
+    hideModal('add-expense-modal');
+    showToast({ title: 'খরচ আপডেট হয়েছে! ✏️', msg: `${exps[idx].cat} — ৳${amount}`, type: 'info' });
+  } else {
+    // ===== NEW MODE =====
+    const exp = {
+      id: Date.now(),
+      year:   document.getElementById('exp-e-year').value,
+      month:  document.getElementById('exp-e-month').value,
+      cat:    document.getElementById('exp-e-cat').value,
+      desc:   document.getElementById('exp-e-desc').value,
+      amount,
+      date:   document.getElementById('exp-e-date').value,
+      note:   document.getElementById('exp-e-note').value,
+    };
+    exps.push(exp);
+    saveExpenses(exps);
+    hideModal('add-expense-modal');
+    showToast({ title: 'খরচ সেভ হয়েছে! 💸', msg: `${exp.cat} — ৳${exp.amount} | ${exp.month} ${exp.year}`, type: 'success' });
+  }
+
+  // ফর্ম রিসেট
+  document.getElementById('exp-edit-id').value = '';
+  document.getElementById('exp-e-desc').value = '';
+  document.getElementById('exp-e-amount').value = '';
+  document.getElementById('exp-e-note').value = '';
+  document.querySelector('#add-expense-modal h3').textContent = '💸 নতুন খরচ যোগ করুন';
+  document.getElementById('exp-save-btn').textContent = '💾 সেভ করুন';
   renderExpenses();
 }
 
@@ -3049,11 +3443,21 @@ function renderExpenses() {
   if (addExpBtn) addExpBtn.style.display = isAdmin() ? '' : 'none';
 }
 
+function openAddExpense() {
+  // ফর্ম পরিষ্কার করো
+  document.getElementById('exp-edit-id').value = '';
+  document.getElementById('exp-e-desc').value = '';
+  document.getElementById('exp-e-amount').value = '';
+  document.getElementById('exp-e-note').value = '';
+  document.querySelector('#add-expense-modal h3').textContent = '💸 নতুন খরচ যোগ করুন';
+  document.getElementById('exp-save-btn').textContent = '💾 সেভ করুন';
+  showModal('add-expense-modal');
+}
+
 function editExpense(id) {
   const exp = loadExpenses().find(e => e.id == id);
   if (!exp) return;
-  // modal খুলে ফর্ম পূরণ করো
-  showModal('add-expense-modal');
+  document.getElementById('exp-edit-id').value  = id;
   document.getElementById('exp-e-year').value   = exp.year;
   document.getElementById('exp-e-month').value  = exp.month;
   document.getElementById('exp-e-cat').value    = exp.cat;
@@ -3061,37 +3465,11 @@ function editExpense(id) {
   document.getElementById('exp-e-amount').value = exp.amount;
   document.getElementById('exp-e-date').value   = exp.date || '';
   document.getElementById('exp-e-note').value   = exp.note || '';
-  // modal title ও save button আপডেট করো
   document.querySelector('#add-expense-modal h3').textContent = '✏️ খরচ এডিট করুন';
-  const saveBtn = document.querySelector('#add-expense-modal .btn-success');
-  saveBtn.textContent = '💾 আপডেট করুন';
-  saveBtn.onclick = () => updateExpense(id);
+  document.getElementById('exp-save-btn').textContent = '💾 আপডেট করুন';
+  showModal('add-expense-modal');
 }
 
-function updateExpense(id) {
-  const amount = parseFloat(document.getElementById('exp-e-amount').value)||0;
-  if (!amount) { alert('⚠️ টাকার পরিমাণ দিন'); return; }
-  const exps = loadExpenses();
-  const idx = exps.findIndex(e => e.id == id);
-  if (idx === -1) return;
-  exps[idx] = { ...exps[idx],
-    year:   document.getElementById('exp-e-year').value,
-    month:  document.getElementById('exp-e-month').value,
-    cat:    document.getElementById('exp-e-cat').value,
-    desc:   document.getElementById('exp-e-desc').value,
-    amount,
-    date:   document.getElementById('exp-e-date').value,
-    note:   document.getElementById('exp-e-note').value,
-  };
-  saveExpenses(exps);
-  hideModal('add-expense-modal');
-  // modal reset করো
-  document.querySelector('#add-expense-modal h3').textContent = '💸 নতুন খরচ যোগ করুন';
-  const saveBtn = document.querySelector('#add-expense-modal .btn-success');
-  saveBtn.textContent = '✅ সেভ করুন';
-  saveBtn.onclick = saveExpense;
-  renderExpenses();
-}
 
 function deleteExpense(id) {
   const exp = loadExpenses().find(e => e.id == id);
@@ -3123,7 +3501,15 @@ function renderShops() {
   const data  = loadData();
   const now   = new Date();
   const cy = now.getFullYear().toString(), cm = MONTHS[now.getMonth()];
-  let html = '';
+
+  // ১৬ — চুক্তি মেয়াদ alert
+  const expired  = shops.filter(s => s.endDate && new Date(s.endDate) < now);
+  const expiring = shops.filter(s => { if (!s.endDate) return false; const d = Math.floor((new Date(s.endDate)-now)/(86400000)); return d>=0 && d<=60; });
+  let alertHTML = '';
+  if (expired.length)  alertHTML += `<div class="alert alert-danger" style="margin-bottom:10px">🚨 <strong>${expired.length}টি দোকানের চুক্তি মেয়াদ শেষ:</strong> ${expired.map(s=>s.no+' ('+s.name+')').join(', ')}</div>`;
+  if (expiring.length) alertHTML += `<div class="alert alert-info" style="margin-bottom:10px">⚠️ <strong>${expiring.length}টি দোকানের চুক্তি শীঘ্রই শেষ হবে:</strong> ${expiring.map(s=>s.no+' ('+s.name+')').join(', ')}</div>`;
+
+  let html = alertHTML;
   shops.forEach((s,idx) => {
     const rec = data.find(r=>r.shopNo===s.no&&r.year==cy&&r.month==cm);
     const sb = s.status==='active' ? '<span class="active-badge">সক্রিয়</span>' : '<span class="inactive-badge">নিষ্ক্রিয়</span>';
@@ -3310,7 +3696,7 @@ function importFromJSON(input) {
   reader.onload=e=>{
     try {
       const b=JSON.parse(e.target.result);
-      if(!b.records){alert('ফাইলটি সঠিক নয়!');return;}
+      if(!b.records){ showToast({ title: '❌ ফাইলটি সঠিক নয়!', msg: 'JSON ফরম্যাট ঠিক নেই', type: 'error' }); return; }
       const existing=loadData();
       const ids=new Set(existing.map(r=>r.id));
       const newRecs=b.records.filter(r=>!ids.has(r.id));
@@ -3321,9 +3707,9 @@ function importFromJSON(input) {
       if(b.marketInfo) saveMarketInfoToStorage(b.marketInfo);
       if(b.notes) saveNotes(b.notes);
       if(b.loans) saveLoans(b.loans);
-      alert(`✅ ${newRecs.length}টি রেকর্ড যোগ হয়েছে।`);
+      showToast({ title: `✅ ${newRecs.length}টি রেকর্ড যোগ হয়েছে!`, msg: 'JSON ব্যাকআপ থেকে সফলভাবে রিস্টোর হয়েছে', type: 'success', duration: 4000 });
       renderDashboard(); renderShops(); initShopDropdown(); updateMarketContactDisplay();
-    } catch(err){alert('ফাইল পড়তে সমস্যা!');}
+    } catch(err){ showToast({ title: '❌ ফাইল পড়তে সমস্যা!', msg: 'সঠিক JSON ফাইল দিন', type: 'error' }); }
   };
   reader.readAsText(file); input.value='';
 }
@@ -3524,7 +3910,13 @@ async function driveImportBackup() {
     const file = await findDriveFile(token);
     if (!file) { showDriveStatus('⚠️ Drive-এ কোনো ব্যাকআপ পাওয়া যায়নি। আগে সেভ করুন।', 'info'); return; }
     const lastMod = new Date(file.modifiedTime).toLocaleString('bn-BD');
-    if (!confirm(`Drive-এ ব্যাকআপ পাওয়া গেছে!\nশেষ সেভ: ${lastMod}\n\nরিস্টোর করবেন?`)) return;
+    const ok = await customConfirm({
+      icon: '☁️', title: 'Drive থেকে রিস্টোর করবেন?',
+      msg: `ব্যাকআপ পাওয়া গেছে!<br><strong>শেষ সেভ:</strong> ${lastMod}<br><br>বর্তমান ডেটার সাথে merge হবে।`,
+      okText: '✅ রিস্টোর করুন', okClass: 'blue',
+      cancelText: '↩️ বাতিল'
+    });
+    if (!ok) return;
     showDriveStatus('⏳ ডাউনলোড হচ্ছে...', 'info');
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
       { headers: { Authorization: `Bearer ${token}` } });
@@ -3562,7 +3954,7 @@ function showDriveSetupModal() {
 
 function saveDriveClientId() {
   const id = (document.getElementById('gdrive-client-id-input').value || '').trim();
-  if (!id) { alert('Client ID দিন'); return; }
+  if (!id) { showToast({ title: '⚠️ Client ID দিন', type: 'info' }); return; }
   localStorage.setItem('gdrive_client_id', id);
   hideModal('drive-setup-modal');
   showModal('info-modal');
